@@ -334,7 +334,7 @@ uint8_t * WebUSBCDC::configurationDesc() //NEED TO CHECK DATA IN HERE
 uint8_t * WebUSBCDC::stringIproductDesc() //NOT IMPORTANT FOR FUNCTIONALITY
 {
 	static uint8_t stringIproductDescriptor[] = {
-        0x08,
+        0x12,
         STRING_DESCRIPTOR,
         'm',0,'b',0,'e',0,'d',0,'1',0,'7',0,'6',0,'8',0,
     };
@@ -354,7 +354,7 @@ uint8_t * WebUSBCDC::stringIinterfaceDesc() //NOT IMPORTANT FOR FUNCTIONALITY
 uint8_t * WebUSBCDC::stringImanufacturerDesc() //NOT IMPORTANT FOR FUNCTIONALITY
 {
 	static uint8_t stringImanufacturerDescriptor[] = {
-        0x06,                                            /*bLength*/
+        0x0E,                                            /*bLength*/
         STRING_DESCRIPTOR,                               /*bDescriptorType 0x03*/
         'm',0,'b',0,'e',0,'d',0,'O',0,'S',0,
     };
