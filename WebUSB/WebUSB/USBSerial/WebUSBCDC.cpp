@@ -16,6 +16,10 @@
 *
 */
 
+
+/*
+    USE ENPOINT 5 IN JAVASCRIPT 
+*/
 #include "WebUSB.h"
 #include "WebUSBDevice.h"
 #include "WebUSBCDC.h"
@@ -26,11 +30,15 @@
 static uint8_t cdc_line_coding[7]= {0x80, 0x25, 0x00, 0x00, 0x00, 0x00, 0x08};
 
 #define DEFAULT_CONFIGURATION (1)
+
 #define CDC_SET_LINE_CODING        0x20
 #define CDC_GET_LINE_CODING        0x21
 #define CDC_SET_CONTROL_LINE_STATE 0x22
+
+//Constrol Line State bits
 #define CLS_DTR   (1 << 0)
 #define CLS_RTS   (1 << 1)
+
 #define CDC_INT_INTERFACE_NUMBER  (0)
 #define CDC_INTERFACE_NUMBER  (1)
 #define WEBUSB_INTERFACE_NUMBER  (2)
@@ -75,6 +83,7 @@ static uint8_t cdc_line_coding[7]= {0x80, 0x25, 0x00, 0x00, 0x00, 0x00, 0x08};
 #define WEBUSB_ENDPOINT_COUNT                           (2)
 #define WEBUSB_ENDPOINT_IN                              (EP5IN)
 #define WEBUSB_ENDPOINT_OUT                             (EP5OUT)
+
 #define FULL_CONFIGURATION_SIZE   (CONFIGURATION_DESCRIPTOR_LENGTH + \
     (3 * INTERFACE_DESCRIPTOR_LENGTH) + (5 * ENDPOINT_DESCRIPTOR_LENGTH) + \
     IAD_DESCRIPTOR_LENGTH + HEADER_FUNCTIONAL_DESCRIPTOR_LENGTH + CALL_MANAGEMENT_FUNCTIONAL_DESCRIPTOR_LENGTH + \
@@ -85,8 +94,6 @@ static uint8_t cdc_line_coding[7]= {0x80, 0x25, 0x00, 0x00, 0x00, 0x00, 0x08};
                               WEBUSB_FUNCTION_SUBSET_LENGTH + \
                               NUM_ORIGINS)
 
-//CHECK VALUES ABOVE
-Serial pc(USBTX,USBRX);
 WebUSBCDC::WebUSBCDC(uint16_t vendor_id, uint16_t product_id, uint16_t product_release, bool connect): WebUSBDevice(vendor_id, product_id, product_release)
 {
 	cdc_connected = false;
@@ -94,7 +101,6 @@ WebUSBCDC::WebUSBCDC(uint16_t vendor_id, uint16_t product_id, uint16_t product_r
 	{
 		WebUSBDevice::connect();
 	}
-	pc.printf("From Constructor.\r\n");
 }
 //------------------------------------------------------
 bool WebUSBCDC::USBCallback_request(void) 
@@ -166,7 +172,6 @@ bool WebUSBCDC::USBCallback_setConfiguration(uint8_t configuration)
     return true;
 }
 //------------------------------------------------------
-	
 bool WebUSBCDC::write(uint8_t * buffer, uint32_t size, bool isCDC)
 {
 	if(isCDC && !cdc_connected)
@@ -252,8 +257,8 @@ uint8_t * WebUSBCDC::configurationDesc() //NEED TO CHECK DATA IN HERE
         HEADER_FUNCTIONAL_DESCRIPTOR_LENGTH,
         CS_INTERFACE,
         HEADER_FUNCTIONAL_DESCRIPTOR,
-        LSB(USB_VERSION_1_1),
-        MSB(USB_VERSION_1_1),
+        LSB(USB_VERSION_1_0),
+        MSB(USB_VERSION_1_0),
 
         // CDC Call Management Functional Descriptor,
         CALL_MANAGEMENT_FUNCTIONAL_DESCRIPTOR_LENGTH,
