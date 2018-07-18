@@ -58,6 +58,7 @@
             value: 0x01,
             index: 0x02
         }, 8);
+        var u_input = document.getElementById('myText').value;
         console.log('Sending Data...');
         //Waiting for 64bytes of data from endpoint #5, store that data in result
         var buffer = new ArrayBuffer(8);
@@ -74,7 +75,7 @@
 
         console.log('Logontst was sent as a message.');
         let encoder = new TextEncoder();
-        buffer = encoder.encode('LOGONTST');
+        buffer = encoder.encode(u_input);
         await device.transferOut(5,buffer);
         console.log('Data Successfully Sent');
         //Decode and print the message
