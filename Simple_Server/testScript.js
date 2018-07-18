@@ -48,7 +48,7 @@
         console.log('Received: ' + decoder.decode(result.data));
     }
     /*This function is used to send data to the device*/
-    async function sendData(device)
+    async function sendData(device, u_input)
     {
         //Make the device ready to send data
         await device.controlTransferIn({
@@ -58,7 +58,6 @@
             value: 0x01,
             index: 0x02
         }, 8);
-        var u_input = document.getElementById('myText').value;
         console.log('Sending Data...');
         //Waiting for 64bytes of data from endpoint #5, store that data in result
         var buffer = new ArrayBuffer(8);
@@ -146,11 +145,14 @@
         send.addEventListener('click', async() => {
             document.getElementById('demo').innerHTML = "Entered Here";
             let device;
-            try{
+            var period = document.getElementById('per').value;
+            var dutyCycle = document.getElementById('dutyCycle').value;            try{
                 device = await navigator.usb.requestDevice({filters: [{vendorId:0x1F00}]})
                 await connectDev(device);
-
-                await sendData(device); //Currently, sendData also receives data to test it
+                await sendData(device,period); //Currently, sendData also receives data to test it
+                await sendData(device,dutyCycle);
+                await receiveData(device);
+                await receiveData(device);
                 await closeDev(device);
             } catch(err){
                 console.log('No Device was selected' + err);
