@@ -63,6 +63,10 @@ int main() {
         wait(.2);
         req = 0; //Set signal to 0 so that it can rise again
         time(period, duty); //Period and duty cycle will be returned by reference
+        delete [] perBuf1; //Deallocating memory
+        delete [] dutyBuf1;
+        perBuf1 = 0; //Dereference pointers
+        dutyBuf1 = 0; 
         if(period<=0)//Period is returned as -1 if a timeout error occurs
         {
             uint8_t errBuf1[] = {'T','I','M','E','O','U','T'};
@@ -81,7 +85,7 @@ int main() {
             writeToBrowser(dutyBuf);
             delete [] perBuf; //Deallocate memory
             delete [] dutyBuf;
-            perBuf = 0;
+            perBuf = 0; //Dereference pointers
             dutyBuf = 0;
         }
     }
@@ -150,7 +154,7 @@ void writeToBrowser(uint8_t buffer[]) //Sends data to the browser
             }
 }
 //----------------------------------------------------------
-void readDataFromBrowser(uint8_t * buffer, uint32_t & len) //Reads data from browser into buffer
+void readDataFromBrowser(uint8_t *buffer, uint32_t & len) //Reads data from browser into buffer
 {   
     bool read = false;
         while(!read)
