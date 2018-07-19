@@ -25,10 +25,11 @@
             await device.claimInterface(2);
             console.log('Interface Claimed');
         }
-
     }
+    //------------------------------------------------------------------
     //CHANGED
-    /*This function is used to receive data from the device.*/
+    /*This function is used to receive data from device, function will return 
+    the data received*/
     async function receiveData(device)
     {
         //Make the device ready to receive data
@@ -45,9 +46,11 @@
         console.log('Data Received');
         //Decode and print the message
         let decoder = new TextDecoder();
-        console.log('Received: ' + decoder.decode(result.data));
+        return decoder.decode(result.data);
+        //console.log('Received: ' + decoder.decode(result.data)); CHANGEHERE
     }
-    /*This function is used to send data to the device*/
+    //-------------------------------------------------------------------
+    /*This function is used to send data to the device, u_input is data to be sent*/
     async function sendData(device, u_input)
     {
         //Make the device ready to send data
@@ -61,18 +64,8 @@
         console.log('Sending Data...');
         //Waiting for 64bytes of data from endpoint #5, store that data in result
         var buffer = new ArrayBuffer(8);
-        /*buffer[0] = 'L';
-        buffer[1] = 'O';
-        buffer[2] = 'G';
-        buffer[3] = 'O';
-        buffer[4] = 'N';
-        buffer[5] = 'T';
-        buffer[6] = 'S';
-        buffer[7] = 'T';
-        May not need, as textencoder should handle this
-        */
 
-        console.log('Logontst was sent as a message.');
+        console.log('Sent a message.');
         let encoder = new TextEncoder();
         buffer = encoder.encode(u_input);
         await device.transferOut(5,buffer);
@@ -83,6 +76,7 @@
         //await receiveData(device); //ONLY UNCOMMENT TO LINK SENDING AND RECEIVING DATA
     }
 
+    //-------------------------------------------------------------------
     /*This function is used to close the device*/
     async function closeDev(device)
     {
@@ -94,7 +88,7 @@
             console.log('Device closed');
     }
 
-
+    //-------------------------------------------------------------------
     /*Used to check if there are devices alreay paired from before*/
     document.addEventListener('DOMContentLoaded', async () => {
         let devices = await navigator.usb.getDevices();
@@ -103,17 +97,20 @@
         });
     });
 
+    //-------------------------------------------------------------------
     /*Used to detect when a USB device is connected. NOTE: Connected means that
     a new USB device is connected to the PC, not that a device is opened by WebUSB.*/
     navigator.usb.addEventListener('connect', event => {
         console.log('Device connected');// Add |event.device| to the UI.
     });
 
+    //-------------------------------------------------------------------
     /*Used to detect when a USB device is disconnected, look at note above.*/
     navigator.usb.addEventListener('disconnect', event => {
         console.log('Device disconencted');// Remove |event.device| from the UI.
     });
 
+    //-------------------------------------------------------------------
     /*Defining what happens when the button is clicked*/
     let receive = document.getElementById('request-device');
     //Check that the button exists
@@ -140,7 +137,9 @@
         })
     }
 
-    let send = document.getElementById('test');
+    //-------------------------------------------------------------------
+    /*Defines what happens when the send button is clicked*/
+    let send = document.getElementById('send');
     if(send){
         send.addEventListener('click', async() => {
             document.getElementById('demo').innerHTML = "Entered Here";
@@ -159,3 +158,75 @@
             }
         })
     }
+
+    //-------------------------------------------------------------------
+    //Defines what happens when Download Main button is clicked
+    let blinky2 = document.getElementById('blinky2');
+    if(blinky2){
+        blinky2.addEventListener('click', async()=>{
+            let device;
+            try{
+                device = await navigator.usb.requestDevice({filters: [{vendorId:0x1F00}]})
+                await connectDev(device);
+                console.log("blinky2");
+                await sendData(device, 'RESET');
+                console.log('sent');
+                await closeDev(device);
+            }
+            catch(err){
+                console.log(err);
+            }
+        })
+    }
+
+    //-------------------------------------------------------------------
+    /*Defines what happens when Download Blinky button is clicked*/
+    let blinky1 = document.getElementById('blinky1');
+    if(blinky1){
+        blinky1.addEventListener('click', async()=>{
+            let device;
+            try{
+                device = await navigator.usb.requestDevice({filters: [{vendorId:0x1F00}]})
+                await connectDev(device);
+                console.log("blinky1");
+                await sendData(device, 'RESET');
+                console.log('sent');
+                await closeDev(device);
+            }
+            catch(err){
+                console.log(err);
+            }
+        })
+    }
+
+    //-------------------------------------------------------------------
+    //BUTTON FUNCTIONALITY
+     let run = document.getElementById('test-cases');
+     if (run){
+        run.addEventListener('click', async () => {
+            let device;
+            var per1 = '01111';
+            var duty1 = '0110010';
+            var per2 = '01011';
+            var duty2 = '1000110';
+            var per3 = '10110';
+            var duty3 = '1011010';
+            var per4 = '11110';
+            var duty4 = '0001010';
+            var per5 = '00010';
+            var duty5 = '0010001';
+            var list = [per1, duty1, per2, duty2, per3, duty3, per4, duty4, per5, duty5];
+            var results = [];
+            device = await navigator.usb.requestDevice({filters: [{vendorId:0x1F00}]})
+            for(var i=0; i<10; i+=2){
+                await connectDev(device);
+                await sendData(device, list[i]);
+                await sendData(device, list[i+1]);
+                results[i] = await receiveData(device);
+                results[i+1] = await receiveData(device);
+            }
+            console.log(results.toString());
+
+
+        })
+     }
