@@ -12,9 +12,9 @@
 
 //PWM Pins
 InterruptIn PWM_API(p27); //Using built in function
-DigitalIn PWM_MANUAL(p25);
+DigitalIn PWM_MANUAL(p25); //Using toggling
 
-DigitalOut req(p21); //Tells F7 to start
+DigitalOut req(p21); //Tells F7 to start generating waves
 
 //Period Pins
 DigitalOut MSP(p5); //Most significant bit for period
@@ -37,13 +37,15 @@ DigitalOut dutyList[] = {MSD, DC2, DC3, DC4, DC5, DC6, LSD}; //List of duty cycl
 //For Debugging, terminal output
 Serial pc(USBTX, USBRX);
 
-//Helper Functions 
+//Helper Function Prototypes; Definitions below main
 void time(float &period, float &duty);
 void sendBinary(uint8_t buffer[], DigitalOut list[], int size);
 void convertFloatToBuf(float num, uint8_t buf[], int sigFigs);
-void writeToBrowser(uint8_t perBuffer[],uint8_t dutyBuffer[]);
+void writeToBrowser(uint8_t buffer[]);
+void readDataFromBrowser(uint8_t * buffer, uint32_t & len);
 //static_cast<int>(n >= 0 ? n + 0.1 : n - 0.1)  WILL CAST PERIOD TO INT IF WANTED
 
+//USB object
 WebUSBCDC webUSB(0x1F00,0x2012,0x0001, false);
 int main() {
     while(1) 
@@ -53,33 +55,20 @@ int main() {
         uint8_t * perBuf1, * dutyBuf1;
         perBuf1 = new uint8_t[MAX_BUF_SIZE]; //Dynamically allocated because read function prefers it
         dutyBuf1 = new uint8_t[MAX_BUF_SIZE];
-        bool read = false;
-        while(!read)
-        {
-            if (!webUSB.configured()) 
-            {
-                webUSB.connect();
-            }
-                
-            if(webUSB.configured() && webUSB.read(perBuf1, &lenPer))
-            {
-                wait(1);
-                webUSB.read(dutyBuf1, &lenDuty);
-                read = true;
-            } 
-        }
-        sendBinary(perBuf1, perList, NUM_PERIOD_PINS); 
+        readDataFromBrowser(perBuf1, lenPer);
+        readDataFromBrowser(dutyBuf1, lenDuty);
+        sendBinary(perBuf1, perList, NUM_PERIOD_PINS); //Sends data for other board to interpret
         sendBinary(dutyBuf1, dutyList, NUM_DUTY_CYCLE_PINS);
         req = 1; //Send signal for other board to generate waves
         wait(.2);
-        req = 0;
-        time(period, duty); //Period and duty will be returned by reference
-        wait(1);
+        req = 0; //Set signal to 0 so that it can rise again
+        time(period, duty); //Period and duty cycle will be returned by reference
         if(period<=0)//Period is returned as -1 if a timeout error occurs
         {
             uint8_t errBuf1[] = {'T','I','M','E','O','U','T'};
             uint8_t errBuf2[] = {'E','R','R','O','R'};
-            writeToBrowser(errBuf1, errBuf2);
+            writeToBrowser(errBuf1);
+            writeToBrowser(errBuf2);
         }
         else
         {
@@ -88,12 +77,12 @@ int main() {
             dutyBuf = new uint8_t[SIG_FIGS];
             convertFloatToBuf(period, perBuf, SIG_FIGS);
             convertFloatToBuf(duty, dutyBuf, SIG_FIGS);
-            writeToBrowser(perBuf, dutyBuf);
+            writeToBrowser(perBuf);
+            writeToBrowser(dutyBuf);
             delete [] perBuf; //Deallocate memory
             delete [] dutyBuf;
             perBuf = 0;
             dutyBuf = 0;
-            wait(3);
         }
     }
 }
@@ -147,17 +136,32 @@ void convertFloatToBuf(float num, uint8_t buf[], int sigFigs) //Converts a float
     }
 }
 //----------------------------------------------------------
-void writeToBrowser(uint8_t perBuffer[],uint8_t dutyBuffer[]) //Sends data to the browser
+void writeToBrowser(uint8_t buffer[]) //Sends data to the browser
 {
     bool isFinished = false;
     while(!isFinished)
             {
                 if(!webUSB.configured())
                     webUSB.connect();
-                if(webUSB.configured() && webUSB.write(perBuffer,SIG_FIGS))
+                if(webUSB.configured() && webUSB.write(buffer,SIG_FIGS))
                 {
-                    webUSB.write(dutyBuffer,SIG_FIGS);
                     isFinished = true;
                 }
             }
+}
+//----------------------------------------------------------
+void readDataFromBrowser(uint8_t * buffer, uint32_t & len) //Reads data from browser into buffer
+{   
+    bool read = false;
+        while(!read)
+        {
+            if (!webUSB.configured()) 
+            {
+                webUSB.connect();
+            }   
+            if(webUSB.configured() && webUSB.read(buffer, &len))
+            {
+                read = true;
+            } 
+        }
 }
