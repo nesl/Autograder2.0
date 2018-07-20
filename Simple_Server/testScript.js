@@ -218,6 +218,13 @@
             var list = [per1, duty1, per2, duty2, per3, duty3, per4, duty4, per5, duty5];
             var results = [];
             var index = 1;
+            receive.disabled = true;
+            send.disabled = true;
+            run.disabled = true;
+            blinky1.disabled = true;
+            blinky2.disabled = true;
+
+            try{
             device = await navigator.usb.requestDevice({filters: [{vendorId:0x1F00}]})
             for(var i=0; i<10; i+=2){
                 await connectDev(device);
@@ -227,20 +234,32 @@
                 results[i+1] = await receiveData(device);
                 var per = parseFloat(results[i]) * 1000;
                 var dCycle = parseFloat(results[i+1]) * 100;
-                var h = document.createElement('P');
+                var div = document.createElement('DIV');
+                var pdiv = document.createElement('DIV');
+                var dcdiv = document.createElement('DIV');
                 var br = document.createElement('BR');
                 var t = document.createTextNode('Test Case: ' + index);
-                h.appendChild(t);
-                document.body.appendChild(h);
+                div.appendChild(t);
+                document.body.appendChild(div);
                 t = document.createTextNode(' Period received: ' + per  + 'ms');
-                h.appendChild(t);
-                document.body.appendChild(h);
+                pdiv.appendChild(t);
+                document.body.appendChild(pdiv);
                 t = document.createTextNode(' Duty Cycle received: '+ dCycle +'%');
-                h.appendChild(t);
-                document.body.appendChild(h);
+                dcdiv.appendChild(t);
+                document.body.appendChild(dcdiv);
+                document.body.appendChild(br);
                 index++;
             }
+        }
+        catch(err){
+            console.log(err);
+        }
             index = 1;
+            receive.disabled = false;
+            send.disabled = false;
+            run.disabled = false;
+            blinky1.disabled = false;
+            blinky2.disabled = false;
             console.log(results.toString());
 
 
