@@ -217,6 +217,7 @@
             var duty5 = '0010001';
             var list = [per1, duty1, per2, duty2, per3, duty3, per4, duty4, per5, duty5];
             var results = [];
+            var index = 1;
             device = await navigator.usb.requestDevice({filters: [{vendorId:0x1F00}]})
             for(var i=0; i<10; i+=2){
                 await connectDev(device);
@@ -224,7 +225,22 @@
                 await sendData(device, list[i+1]);
                 results[i] = await receiveData(device);
                 results[i+1] = await receiveData(device);
+                var per = parseFloat(results[i]) * 1000;
+                var dCycle = parseFloat(results[i+1]) * 100;
+                var h = document.createElement('P');
+                var br = document.createElement('BR');
+                var t = document.createTextNode('Test Case: ' + index);
+                h.appendChild(t);
+                document.body.appendChild(h);
+                t = document.createTextNode(' Period received: ' + per  + 'ms');
+                h.appendChild(t);
+                document.body.appendChild(h);
+                t = document.createTextNode(' Duty Cycle received: '+ dCycle +'%');
+                h.appendChild(t);
+                document.body.appendChild(h);
+                index++;
             }
+            index = 1;
             console.log(results.toString());
 
 
