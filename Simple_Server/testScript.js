@@ -1,4 +1,5 @@
-
+//Wait until page is fully loaded
+$(document).ready(function(){
     /*This function is used to open the USB device, select the configuration, and 
     to select the interface. Await is followed with a promise. This means that the
     promise will carry out and the function will wait until that promised is fulfilled.
@@ -87,11 +88,7 @@
     //-------------------------------------------------------------------
     /*This function disables/enables all buttons*/
     function disableButtons(flag){
-        receive.disabled = flag;
-        send.disabled = flag;
-        run.disabled = flag;
-        blinky1.disabled = flag;
-        blinky2.disabled = flag;
+        $(':button').prop('disabled',flag); //Selects all buttons, sets diasabled to flag
     }
 
     //-------------------------------------------------------------------
@@ -131,8 +128,8 @@
     //Check that the button exists
     if(receive){
         //What happens when the button is clicked
-        receive.addEventListener('click', async() => {
-            document.getElementById('demo').innerHTML = "Paragraph changed.";
+        $(receive).click(async() => {
+            $('#demo').text('Paragraph changed');
             let device;
             try {
                 disableButtons(true);
@@ -159,12 +156,12 @@
     send period and duty cycle (user input) to the test board and then receive the time 
     stamps measured by the test baord for the period and duty cycle.*/
     if(send){
-        send.addEventListener('click', async() => {
-            document.getElementById('demo').innerHTML = "Entered Here";
+        $(send).click(async() => {
+            $('#demo').text("Entered Here");
             let device;
             //Get values period and duty cycle entered by usert
-            var period = document.getElementById('per').value;
-            var dutyCycle = document.getElementById('dutyCycle').value;            
+            var period = $('#per').val();
+            var dutyCycle = $('#dutyCycle').val();            
             try{
                 //Select device
                 disableButtons(true);
@@ -189,7 +186,7 @@
     downloads a program that simply causes LED1 to blink. Transferring this file 
     should cause the test baord to reset itself.*/
     if(blinky2){
-        blinky2.addEventListener('click', async()=>{
+        $(blinky2).click(async()=>{
             let device;
             try{
                 disableButtons(true);
@@ -214,7 +211,7 @@
     downloads a program that simply causes LED3 to blink. Transferring this file 
     should cause the test baord to reset itself.*/
     if(blinky1){
-        blinky1.addEventListener('click', async()=>{
+        $(blinky1).click(async()=>{
             let device;
             try{
                 disableButtons(true);
@@ -240,7 +237,7 @@
     formatted to be displayed on the browser.*/
     //BUTTON FUNCTIONALITY
      if (run){
-        run.addEventListener('click', async () => {
+        $(run).click(async () => {
             let device;
             //Define all periods and duty cycles in binary
             var per1 = '01111';
@@ -275,29 +272,9 @@
                 var per = (parseFloat(results[i]) * 1000).toFixed(SIG_FIG);; //Convert from seconds to ms
                 var dCycle = (parseFloat(results[i+1]) * 100).toFixed(SIG_FIG); //Convert from decimal to percentage
 
-                //Formatting
-                var div = document.createElement('DIV'); //Test Case div
-                var pdiv = document.createElement('DIV');  //Period div
-                var dcdiv = document.createElement('DIV');  //Duty Cycle div 
-                var br = document.createElement('BR'); //Used as <br>
-
-                //Print test case
-                var t = document.createTextNode('Test Case: ' + index);
-                div.appendChild(t);
-                document.body.appendChild(div);
-
-                //Print period
-                t = document.createTextNode(' Period received: ' + per  + 'ms');
-                pdiv.appendChild(t);
-                document.body.appendChild(pdiv);
-
-                //Print duty cycle
-                t = document.createTextNode(' Duty Cycle received: '+ dCycle +'%');
-                dcdiv.appendChild(t);
-                document.body.appendChild(dcdiv);
-
-                //Print <br>
-                document.body.appendChild(br);
+                $(document.body).append('<div>Test Case: ' + index + '</div>' +
+                    '<div>Period received: ' + per + 'ms</div>' +
+                    '<div>Duty Cycle received: ' + dCycle + '%</div><br>');
                 index++;
             }
         }
@@ -311,3 +288,52 @@
 
         })
      }
+
+})
+
+var numCycles = 10;
+    function graphPlotly(period, dutyCycle, id){
+        let test = document.getElementById(id);
+        var xAxis = [];
+        var yAxis = [];
+        var sumX = 0;
+        var sumY = 0;
+        for(var i=0; i<numCycles;++i){
+            xAxis.push(period*(i));
+            xAxis.push(period*(i) + period*dutyCycle);
+            xAxis.push(period*(i) + period*dutyCycle);
+            xAxis.push(period*(i+1));
+        }
+        for(var i=0;i<numCycles/2;++i)
+        {
+            yAxis.push(1);
+            yAxis.push(1);
+            yAxis.push(0);
+            yAxis.push(0);
+        }
+        /*
+        var testTrace = {
+            x: [0, 10, 10, 20, 20],
+            y: [1, 1, 0, 0, 1],
+        };
+        */ 
+        Plotly.plot(test, [{
+            x: xAxis,
+            y: yAxis 
+            }],
+            {margin: {t:0}}    
+        );
+    }
+    
+    let anotherTest = document.getElementById('plotly-test');
+    if(anotherTest){
+        anotherTest.addEventListener('click', async () => {
+            
+            
+            var period = 10;
+            var duty = 0.4;
+            id = 'tester';
+            graphPlotly(period, duty, id);  //THIS IS THE FUNCTION YOU USE TO PLOT IT
+            
+        })
+    }
