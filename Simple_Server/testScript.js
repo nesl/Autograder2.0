@@ -122,9 +122,50 @@ $(document).ready(function(){
     let run = document.getElementById('test-cases');
     var SIG_FIG = 7;
     //-------------------------------------------------------------------
+    /*This function will create a plotly graph.
+    *@param {float} period - The period measured from the board
+    *@param {float} dutyCycle - The duty cycle measured from the board
+    *@param {string} id - The ID tag of the <div> element that will hold the graph
+    *@param {int} index - The number of the test case, eg. Test case 1, Test case 2, etc
+    */
+    function graphPlotly(period, dutyCycle, id, index){
+        var numCycles = 10;
+        let test = document.getElementById(id);
+        var xAxis = [];
+        var yAxis = [];
+        var sumX = 0;
+        var sumY = 0;
+        //Creating the x values of the points
+        for(var i=0; i<numCycles;++i){
+            xAxis.push(period*(i));
+            xAxis.push(period*(i) + period*dutyCycle);
+            xAxis.push(period*(i) + period*dutyCycle);
+            xAxis.push(period*(i+1));
+        }
+        //Creating the y values of the points
+        for(var i=0;i<numCycles/2;++i)
+        {
+            yAxis.push(1);
+            yAxis.push(1);
+            yAxis.push(0);
+            yAxis.push(0);
+        }
+        var layout = {
+            title: 'Test Case ' + index.toString(),
+            xaxis:{
+                title: 'Time (ms)'
+            }            
+        };
+        Plotly.plot(test, [{
+            x: xAxis,
+            y: yAxis 
+            }],layout
+            //{margin: {t:0}}    
+        );
+    }
+    //-------------------------------------------------------------------
     /*Defining what happens when the receive button is clicked. This is meant
     to receive data from the test board and print to console*/
-
     //Check that the button exists
     if(receive){
         //What happens when the button is clicked
@@ -235,7 +276,6 @@ $(document).ready(function(){
     /*This is used to several test cases to the test board. The test cases are sent
     and then the time stamps are received by the test board. These time stamps are 
     formatted to be displayed on the browser.*/
-    //BUTTON FUNCTIONALITY
      if (run){
         $(run).click(async () => {
             let device;
@@ -275,6 +315,8 @@ $(document).ready(function(){
                 $(document.body).append('<div>Test Case: ' + index + '</div>' +
                     '<div>Period received: ' + per + 'ms</div>' +
                     '<div>Duty Cycle received: ' + dCycle + '%</div><br>');
+                var elementID = 'plotly-test' + index.toString();
+                graphPlotly(per, dCycle/100, elementID, index);
                 index++;
             }
         }
@@ -290,50 +332,3 @@ $(document).ready(function(){
      }
 
 })
-
-var numCycles = 10;
-    function graphPlotly(period, dutyCycle, id){
-        let test = document.getElementById(id);
-        var xAxis = [];
-        var yAxis = [];
-        var sumX = 0;
-        var sumY = 0;
-        for(var i=0; i<numCycles;++i){
-            xAxis.push(period*(i));
-            xAxis.push(period*(i) + period*dutyCycle);
-            xAxis.push(period*(i) + period*dutyCycle);
-            xAxis.push(period*(i+1));
-        }
-        for(var i=0;i<numCycles/2;++i)
-        {
-            yAxis.push(1);
-            yAxis.push(1);
-            yAxis.push(0);
-            yAxis.push(0);
-        }
-        /*
-        var testTrace = {
-            x: [0, 10, 10, 20, 20],
-            y: [1, 1, 0, 0, 1],
-        };
-        */ 
-        Plotly.plot(test, [{
-            x: xAxis,
-            y: yAxis 
-            }],
-            {margin: {t:0}}    
-        );
-    }
-    
-    let anotherTest = document.getElementById('plotly-test');
-    if(anotherTest){
-        anotherTest.addEventListener('click', async () => {
-            
-            
-            var period = 10;
-            var duty = 0.4;
-            id = 'tester';
-            graphPlotly(period, duty, id);  //THIS IS THE FUNCTION YOU USE TO PLOT IT
-            
-        })
-    }
