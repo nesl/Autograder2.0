@@ -115,7 +115,7 @@ $(document).ready(function(){
     let blinky2 = document.getElementById('blinky2');
     let blinky1 = document.getElementById('blinky1');
     let run = document.getElementById('test-cases');
-    var SIG_FIG = 7;
+    var SIG_FIG = 5;
     var TIME_UNIT = 0.2; //ms
     var numCycles = 10; //Used for plotly function
     
@@ -231,11 +231,11 @@ $(document).ready(function(){
             var duty1 = '0110010'; //50%
             var per2 = '01011'; //120ms
             var duty2 = '1000110'; //70%
-            var per3 = '10110'; //230ms
+            var per3 = '10111'; //230ms
             var duty3 = '1011010'; //90%
-            var per4 = '11110'; //310ms
+            var per4 = '11111'; //310ms
             var duty4 = '0001010'; //10%
-            var per5 = '00010'; //30ms
+            var per5 = '00011'; //30ms
             var duty5 = '0010001'; //17%
             var list = [per1, duty1, per2, duty2, per3, duty3, per4, duty4, per5, duty5];
             var results = [];
@@ -255,13 +255,15 @@ $(document).ready(function(){
                 //Convert results into floats
                 var per = (parseFloat(results[i]) * 1000).toFixed(SIG_FIG);; //Convert from seconds to ms
                 var dCycle = (parseFloat(results[i+1]) * 100).toFixed(SIG_FIG); //Convert from decimal to percentage
-
-                $(document.body).append('<div>Test Case: ' + index + '</div>' +
+                 var elementID = 'plotly-test' + index.toString();
+                 var grade = gradeData(list[i],list[i+1],per, dCycle, TIME_UNIT,index);
+                 var timeunits = 'Fix this';
+                $('#' + elementID).after('<div>Test Case: ' + index + '</div>' +
                     '<div>Period received: ' + per + 'ms</div>' +
-                    '<div>Duty Cycle received: ' + dCycle + '%</div><br>');
-                var elementID = 'plotly-test' + index.toString();
+                    '<div>Duty Cycle received: ' + dCycle + '%</div>' +
+                    '<div>Number of time units off: ' + timeunits + '</div>' +
+                    '<div>Grade: ' +  + '%</div><br>');
                 graphPlotly(per, dCycle/100, elementID, index);
-                gradeData(list[i],list[i+1],per, dCycle, TIME_UNIT,index);
                 index++;
             }
         }
@@ -331,11 +333,12 @@ $(document).ready(function(){
     {
         var expectedPer = (parseInt(binaryPer, 2) + 1)*10;
         var expectedDuty = parseInt(binaryDuty,2);     
-        var periodRemainder = Math.abs((expectedPer - receivedPer)/timeUnit);
+        var periodRemainder = getTimeUnits(expectedPer,receivedPer,timeUnit);
         console.log(periodRemainder);
         if(periodRemainder < 1) //Checking if error was within one time unit
         {
             console.log("For test case " + testCase + " you received 100%.");
+            return 100;
         }
         else
         {
@@ -343,15 +346,20 @@ $(document).ready(function(){
             if(penalty >= 100) //Checking if error exceeds 100%
             {
                 console.log('You received no credit for test case ' + testCase);
+                return 0;
             }
             else
             {
                 console.log('You received ' + (100 - penalty) + '% for test case ' + testCase);
+                return (100-penalty);
             }
         }
 
     }
-
+function getTimeUnits(expectedPer,receivedPer,timeUnit)
+{
+    return Math.abs((expectedPer - receivedPer)/timeUnit);
+}
 //Entire program needs to be in bracket below
 })
    
