@@ -114,8 +114,8 @@ $(document).ready(function(){
     let send = document.getElementById('send');
     let blinky2 = document.getElementById('blinky2');
     let blinky1 = document.getElementById('blinky1');
-    let run = document.getElementById('test-cases');
-    var SIG_FIG = 5;
+    let runAll = document.getElementById('test-cases');
+    var SIG_FIGS = 5;
     var TIME_UNIT = 0.2; //ms
     var numCycles = 10; //Used for plotly function
     
@@ -223,8 +223,8 @@ $(document).ready(function(){
     /*This is used to several test cases to the test board. The test cases are sent
     and then the time stamps are received by the test board. These time stamps are 
     formatted to be displayed on the browser.*/
-     if (run){
-        $(run).click(async () => {
+    if (runAll){
+        $(runAll).click(async () => {
             let device;
             //Define all periods and duty cycles in binary
             var per1 = '01111'; //160ms
@@ -235,48 +235,50 @@ $(document).ready(function(){
             var duty3 = '1011010'; //90%
             var per4 = '11111'; //310ms
             var duty4 = '0001010'; //10%
-            var per5 = '00011'; //30ms
+            var per5 = '00010'; //30ms
             var duty5 = '0010001'; //17%
-            var list = [per1, duty1, per2, duty2, per3, duty3, per4, duty4, per5, duty5];
-            var results = [];
+            var perList = [per1, per2, per3, per4, per5];
+            var dutyList = [duty1,duty2,duty3,duty4,duty5]
+            var perResults = [];
+            var dutyResults = []
             var index = 1;  //Keeps track of what test case we are on
             disableButtons(true);
             try{
-            device = await navigator.usb.requestDevice({filters: [{vendorId:0x1F00}]})
-            //i+=2 because each loop processes a period and duty cycle
-            for(var i=0; i<numCycles; i+=2){
-                await connectDev(device);
-                //Send period followed by duty cycle to test board
-                await sendData(device, list[i]);
-                await sendData(device, list[i+1]);
-                //Store time stamp of period then duty cycle to results
-                results[i] = await receiveData(device);
-                results[i+1] = await receiveData(device);
-                //Convert results into floats
-                var per = (parseFloat(results[i]) * 1000).toFixed(SIG_FIG);; //Convert from seconds to ms
-                var dCycle = (parseFloat(results[i+1]) * 100).toFixed(SIG_FIG); //Convert from decimal to percentage
-                 var elementID = 'plotly-test' + index.toString();
-                 var grade = gradeData(list[i],list[i+1],per, dCycle, TIME_UNIT,index);
-                 var timeunits = 'Fix this';
-                $('#' + elementID).after('<div>Test Case: ' + index + '</div>' +
-                    '<div>Period received: ' + per + 'ms</div>' +
-                    '<div>Duty Cycle received: ' + dCycle + '%</div>' +
-                    '<div>Number of time units off: ' + timeunits + '</div>' +
-                    '<div>Grade: ' +  + '%</div><br>');
-                graphPlotly(per, dCycle/100, elementID, index);
-                index++;
+                device = await navigator.usb.requestDevice({filters: [{vendorId:0x1F00}]})
+                for(var i=0; i<numCycles; i+=1){
+                    var elementID = 'plotly-test' + index.toString(); //Get which test case this is
+                    await connectDev(device);
+                    //Send period followed by duty cycle to test board
+                    await sendData(device, perList[i]);
+                    await sendData(device, dutyList[i]);
+                    //Store time stamp of period then duty cycle to results
+                    perResults[i] = await receiveData(device);
+                    dutyResults[i] = await receiveData(device);
+                    //Convert results into floats
+                    var per = (parseFloat(perResults[i]) * 1000).toFixed(SIG_FIGS);; //Convert from seconds to ms
+                    var dCycle = (parseFloat(dutyResults[i]) * 100).toFixed(SIG_FIGS); //Convert from decimal to percentage
+                    var expectedPer = (parseInt(perList[i], 2) + 1)*10;
+                    var expectedDuty = parseInt(dutyList[i],2);
+                    var periodRemainder = getTimeUnits(expectedPer,per,TIME_UNIT).toFixed(SIG_FIGS);
+                    var grade = gradeData(periodRemainder, expectedDuty, dCycle)
+                    $('#' + elementID).after('<div>Test Case: ' + index + '</div>' +
+                        '<div>Period received: ' + per + 'ms</div>' +
+                        '<div>Duty Cycle received: ' + dCycle + '%</div>' +
+                        '<div>Number of time units off: ' + periodRemainder + '</div>' +
+                        '<div>Grade: ' + grade + '%</div><br>');
+                    graphPlotly(per, dCycle/100, elementID, index);
+                    //function gradeData(periodRemainder, expectedDuty, receivedDuty, testCase)
+                    index++;
+                }
             }
-        }
-        catch(err){
-            console.log(err);
-        }
+            catch(err){
+                console.log(err);
+            }
+
             index = 1; //Reset index for next time
             disableButtons(false);
-            console.log(results.toString()); //Print raw time stamps to console
-
-
         })
-     }
+    }
 
     //-------------------------------------------------------------------
     /*This function will create a plotly graph.
@@ -322,44 +324,39 @@ $(document).ready(function(){
 
     //-------------------------------------------------------------------
     /*This function grades a set of received data
-    *@param {String} binaryPer - The binary of the period that was sent to the board
-    *@param {String} binaryDuty - The binary of the duty cycle that was sent to the board
-    *@param {Float} receivedPer - The measured period
+    *@param {Float} periodRemainder - The number of time units the students answer was off by
+    *@param {Float} expectedDuty - The decimal value of the binary number passed to the board for duty cycle
     *@param {Float} receivedDuty - The measured duty cycle
-    *@param {Float} timeUnit - The minimum time unit by which the grading algorithm will be determined
-    *@param {Int} testCase - The number test case that it is
     */
-    function gradeData(binaryPer,binaryDuty,receivedPer,receivedDuty, timeUnit, testCase)
+    function gradeData(periodRemainder, expectedDuty, receivedDuty)
     {
-        var expectedPer = (parseInt(binaryPer, 2) + 1)*10;
-        var expectedDuty = parseInt(binaryDuty,2);     
-        var periodRemainder = getTimeUnits(expectedPer,receivedPer,timeUnit);
-        console.log(periodRemainder);
         if(periodRemainder < 1) //Checking if error was within one time unit
         {
-            console.log("For test case " + testCase + " you received 100%.");
             return 100;
+        }
+        var penalty = 3*(periodRemainder - 1)*(periodRemainder - 1); //squaring it
+        if(penalty >= 100) //Checking if error exceeds 100%
+        {
+            return 0;
         }
         else
         {
-            var penalty = 3*(periodRemainder - 1)*(periodRemainder - 1); //squaring it
-            if(penalty >= 100) //Checking if error exceeds 100%
-            {
-                console.log('You received no credit for test case ' + testCase);
-                return 0;
-            }
-            else
-            {
-                console.log('You received ' + (100 - penalty) + '% for test case ' + testCase);
-                return (100-penalty);
-            }
+            return (100-penalty);
         }
-
     }
-function getTimeUnits(expectedPer,receivedPer,timeUnit)
-{
-    return Math.abs((expectedPer - receivedPer)/timeUnit);
-}
+
+    //-------------------------------------------------------------------
+    /*This function finds the number of time units that the students answer was off by
+    *@param {Float} expectedPer - The decimal value of the binary number passed to the board for period
+    *@param {Float} receivedPer - The measured value of the period
+    *@param {Float} minTimeUnit - The length of the minimum time unit
+    ALL UNITS MUST BE CONSISTENT. WE HAVE DESIGNED IT TO BE IN MILLISECONDS
+    */
+    function getTimeUnits(expectedPer,receivedPer,minTimeUnit)
+    {
+        return Math.abs((expectedPer - receivedPer)/minTimeUnit);
+    }
+
 //Entire program needs to be in bracket below
 })
    
