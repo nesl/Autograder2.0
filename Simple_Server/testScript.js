@@ -230,9 +230,9 @@ $(document).ready(function(){
             var duty1 = '0110010'; //50%
             var per2 = '01011'; //120ms
             var duty2 = '1000110'; //70%
-            var per3 = '10111'; //230ms
+            var per3 = '10110'; //230ms
             var duty3 = '1011010'; //90%
-            var per4 = '11111'; //310ms
+            var per4 = '11110'; //310ms
             var duty4 = '0001010'; //10%
             var per5 = '00010'; //30ms
             var duty5 = '0010001'; //17%
@@ -266,6 +266,19 @@ $(document).ready(function(){
                         var expectedDuty = parseInt(dutyList[i],2);
                         var periodRemainder = getTimeUnits(expectedPer,per,TIME_UNIT).toFixed(SIG_FIGS);
                         var grade = gradeData(periodRemainder, expectedDuty, dCycle)
+                        var finalResult = 'Test Case: ' + index + '\n' +
+                            'Period received: ' + per + 'ms\n' +
+                            'Duty Cycle received: ' + dCycle + '%\n' +
+                            'Number of time units off: ' + periodRemainder + '\n' +
+                            'Grade: ' + grade + '%\n' + '\n' + '\n' ;
+                        $.ajax({
+                            type: 'POST',
+                            url: 'testFolder/foo.php',
+                            data: { text1: finalResult},
+                            success: function(response) {
+                                console.log('Saved Results');
+                            }
+                        });
                         $('#' + elementID).after('<div>Test Case: ' + index + '</div>' +
                             '<div>Period received: ' + per + 'ms</div>' +
                             '<div>Duty Cycle received: ' + dCycle + '%</div>' +
