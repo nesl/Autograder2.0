@@ -62,7 +62,6 @@ $(document).ready(function(){
         console.log('Sending Data...');
         //Waiting for 64bytes of data from endpoint #5, store that data in result
         var buffer = new ArrayBuffer(8);
-        console.log('Sent a message.');
         let encoder = new TextEncoder();
         buffer = encoder.encode(u_input);
         await device.transferOut(5,buffer);
@@ -254,20 +253,26 @@ $(document).ready(function(){
                     //Store time stamp of period then duty cycle to results
                     perResults[i] = await receiveData(device);
                     dutyResults[i] = await receiveData(device);
-                    //Convert results into floats
-                    var per = (parseFloat(perResults[i]) * 1000).toFixed(SIG_FIGS);; //Convert from seconds to ms
-                    var dCycle = (parseFloat(dutyResults[i]) * 100).toFixed(SIG_FIGS); //Convert from decimal to percentage
-                    var expectedPer = (parseInt(perList[i], 2) + 1)*10;
-                    var expectedDuty = parseInt(dutyList[i],2);
-                    var periodRemainder = getTimeUnits(expectedPer,per,TIME_UNIT).toFixed(SIG_FIGS);
-                    var grade = gradeData(periodRemainder, expectedDuty, dCycle)
-                    $('#' + elementID).after('<div>Test Case: ' + index + '</div>' +
-                        '<div>Period received: ' + per + 'ms</div>' +
-                        '<div>Duty Cycle received: ' + dCycle + '%</div>' +
-                        '<div>Number of time units off: ' + periodRemainder + '</div>' +
-                        '<div>Grade: ' + grade + '%</div><br>');
-                    graphPlotly(per, dCycle/100, elementID, index);
-                    //function gradeData(periodRemainder, expectedDuty, receivedDuty, testCase)
+                    console.log(perResults[i].toString());
+                    if(perResults[i].toString() == 'TIMEOUT'){
+                        $('#' + elementID).after('<div>There was a TIMEOUT ERROR while processing ' +
+                            'test case ' + index + '</div>');
+                    }
+                    else{
+                        //Convert results into floats
+                        var per = (parseFloat(perResults[i]) * 1000).toFixed(SIG_FIGS);; //Convert from seconds to ms
+                        var dCycle = (parseFloat(dutyResults[i]) * 100).toFixed(SIG_FIGS); //Convert from decimal to percentage
+                        var expectedPer = (parseInt(perList[i], 2) + 1)*10;
+                        var expectedDuty = parseInt(dutyList[i],2);
+                        var periodRemainder = getTimeUnits(expectedPer,per,TIME_UNIT).toFixed(SIG_FIGS);
+                        var grade = gradeData(periodRemainder, expectedDuty, dCycle)
+                        $('#' + elementID).after('<div>Test Case: ' + index + '</div>' +
+                            '<div>Period received: ' + per + 'ms</div>' +
+                            '<div>Duty Cycle received: ' + dCycle + '%</div>' +
+                            '<div>Number of time units off: ' + periodRemainder + '</div>' +
+                            '<div>Grade: ' + grade + '%</div><br>');
+                        graphPlotly(per, dCycle/100, elementID, index);
+                    }
                     index++;
                 }
             }
