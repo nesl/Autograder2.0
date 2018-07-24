@@ -31,29 +31,50 @@ DigitalIn dutyList[] = {MSD, DC2, DC3, DC4, DC5, DC6, LSD}; //List that holds al
 //For Debugging
 Serial pc(USBTX,USBRX);
 
+//Helper Functions
 void generate(void);
+int convertPeriodBinary();
+float convertDutyBinary();
+
 int main() 
 {
     req.rise(&generate); //This function is only called when req rises
+    
     while(1) {} //Wait indefinitely for req to rise
 }
-//----------------------
+//---------------------------------------
 void generate(void)
 {
-    int periodSum;
-    float dutySum;
-    for(int i=0; i<NUM_PERIOD_PINS;++i) //Convert the period pins to a decimal
-    {
-        if(perList[i] == true) //Only adds to the sum if the pin is set to 1
-            periodSum += pow(2.0,NUM_PERIOD_PINS - 1 - i); //Power is based on how significant bit is
-    }
-    for(int i=0; i<NUM_DUTY_CYCLE_PINS;++i)
-    {
-        if(dutyList[i] == true)
-            dutySum += pow(2.0,NUM_DUTY_CYCLE_PINS - 1 - i);
-    }
+    int periodSum = convertPeriodBinary();
+    float dutySum = convertDutyBinary();
     dutySum /= 100; //Converting to percentage
     periodSum = (periodSum+1)*10; //Converting to number using formula specified in homework
+    
+    //PWM_MANUAL
+    //PWM_MANUAL
     PWM_API.period_ms(periodSum); 
     PWM_API.write(dutySum); 
+    while(req){}
+}
+//---------------------------------------
+int convertPeriodBinary()
+{
+    int periodSum = 0;
+    for(int i=0; i<NUM_PERIOD_PINS;++i) //Convert the period pins to a decimal
+    {
+        if(perList[i]) //Only adds to the sum if the pin is set to 1
+            periodSum += pow(2.0,NUM_PERIOD_PINS - 1 - i); //Power is based on how significant bit is
+    }    
+    return periodSum;
+}
+//---------------------------------------
+float convertDutyBinary()
+{
+    float dutySum = 0;
+    for(int i=0; i<NUM_DUTY_CYCLE_PINS;++i)
+    {
+        if(dutyList[i])
+            dutySum += pow(2.0,NUM_DUTY_CYCLE_PINS - 1 - i);
+    }
+    return dutySum;
 }
