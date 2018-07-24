@@ -62,7 +62,6 @@ $(document).ready(function(){
         console.log('Sending Data...');
         //Waiting for 64bytes of data from endpoint #5, store that data in result
         var buffer = new ArrayBuffer(8);
-
         console.log('Sent a message.');
         let encoder = new TextEncoder();
         buffer = encoder.encode(u_input);
@@ -127,21 +126,13 @@ $(document).ready(function(){
     if(receive){
         //What happens when the button is clicked
         $(receive).click(async() => {
-            $('#demo').text('Paragraph changed');
             let device;
             try {
                 disableButtons(true);
                 //Have user select device
                 device = await navigator.usb.requestDevice({filters: [{vendorId:0x1F00}]})
-                //Connect the device
-                await connectDev(device);
-                //Receive data from device
-                await receiveData(device);
-                //await receiveData(device);
-                //await receiveData(device);
-                //await receiveData(device);
-                //await receiveData(device);
-                //await closeDev(device); 
+                await connectDev(device);//Connect the device
+                await receiveData(device);//Receive data from device
             } catch (err){
                 console.log('No Device was selected in receive');//No device was selected.
             }
@@ -155,9 +146,8 @@ $(document).ready(function(){
     stamps measured by the test baord for the period and duty cycle.*/
     if(send){
         $(send).click(async() => {
-            $('#demo').text("Entered Here");
             let device;
-            //Get values period and duty cycle entered by usert
+            //Get values period and duty cycle entered by user
             var period = $('#per').val();
             var dutyCycle = $('#dutyCycle').val();            
             try{
@@ -237,35 +227,31 @@ $(document).ready(function(){
         $(run).click(async () => {
             let device;
             //Define all periods and duty cycles in binary
-            var per1 = '01111';
-            var duty1 = '0110010';
-            var per2 = '01011';
-            var duty2 = '1000110';
-            var per3 = '10110';
-            var duty3 = '1011010';
-            var per4 = '11110';
-            var duty4 = '0001010';
-            var per5 = '00010';
-            var duty5 = '0010001';
+            var per1 = '01111'; //160ms
+            var duty1 = '0110010'; //50%
+            var per2 = '01011'; //120ms
+            var duty2 = '1000110'; //70%
+            var per3 = '10110'; //230ms
+            var duty3 = '1011010'; //90%
+            var per4 = '11110'; //310ms
+            var duty4 = '0001010'; //10%
+            var per5 = '00010'; //30ms
+            var duty5 = '0010001'; //17%
             var list = [per1, duty1, per2, duty2, per3, duty3, per4, duty4, per5, duty5];
             var results = [];
             var index = 1;  //Keeps track of what test case we are on
             disableButtons(true);
-
             try{
             device = await navigator.usb.requestDevice({filters: [{vendorId:0x1F00}]})
             //i+=2 because each loop processes a period and duty cycle
-            for(var i=0; i<10; i+=2){
+            for(var i=0; i<numCycles; i+=2){
                 await connectDev(device);
-
                 //Send period followed by duty cycle to test board
                 await sendData(device, list[i]);
                 await sendData(device, list[i+1]);
-
                 //Store time stamp of period then duty cycle to results
                 results[i] = await receiveData(device);
                 results[i+1] = await receiveData(device);
-
                 //Convert results into floats
                 var per = (parseFloat(results[i]) * 1000).toFixed(SIG_FIG);; //Convert from seconds to ms
                 var dCycle = (parseFloat(results[i+1]) * 100).toFixed(SIG_FIG); //Convert from decimal to percentage
