@@ -26,8 +26,8 @@ $(document).ready(function(){
             console.log('Interface Claimed');
         }
     }
+
     //------------------------------------------------------------------
-    //CHANGED
     /*This function is used to receive data from device, function will return 
     the data received*/
     async function receiveData(device){
@@ -46,8 +46,8 @@ $(document).ready(function(){
         //Decode and print the message
         let decoder = new TextDecoder();
         return decoder.decode(result.data);
-        //console.log('Received: ' + decoder.decode(result.data)); CHANGEHERE
     }
+
     //-------------------------------------------------------------------
     /*This function is used to send data to the device, u_input is data to be sent*/
     async function sendData(device, u_input){
@@ -68,10 +68,6 @@ $(document).ready(function(){
         buffer = encoder.encode(u_input);
         await device.transferOut(5,buffer);
         console.log('Data Successfully Sent');
-        //Decode and print the message
-        /*let decoder = new TextDecoder();
-        console.log('Sent: ' + decoder.decode(result.data));*/
-        //await receiveData(device); //ONLY UNCOMMENT TO LINK SENDING AND RECEIVING DATA
     }
 
     //-------------------------------------------------------------------
@@ -121,48 +117,9 @@ $(document).ready(function(){
     let blinky1 = document.getElementById('blinky1');
     let run = document.getElementById('test-cases');
     var SIG_FIG = 7;
-    //-------------------------------------------------------------------
-    /*This function will create a plotly graph.
-    *@param {float} period - The period measured from the board
-    *@param {float} dutyCycle - The duty cycle measured from the board
-    *@param {string} id - The ID tag of the <div> element that will hold the graph
-    *@param {int} index - The number of the test case, eg. Test case 1, Test case 2, etc
-    */
-    function graphPlotly(period, dutyCycle, id, index){
-        var numCycles = 10;
-        let test = document.getElementById(id);
-        var xAxis = [];
-        var yAxis = [];
-        var sumX = 0;
-        var sumY = 0;
-        //Creating the x values of the points
-        for(var i=0; i<numCycles;++i){
-            xAxis.push(period*(i));
-            xAxis.push(period*(i) + period*dutyCycle);
-            xAxis.push(period*(i) + period*dutyCycle);
-            xAxis.push(period*(i+1));
-        }
-        //Creating the y values of the points
-        for(var i=0;i<numCycles/2;++i)
-        {
-            yAxis.push(1);
-            yAxis.push(1);
-            yAxis.push(0);
-            yAxis.push(0);
-        }
-        var layout = {
-            title: 'Test Case ' + index.toString(),
-            xaxis:{
-                title: 'Time (ms)'
-            }            
-        };
-        Plotly.plot(test, [{
-            x: xAxis,
-            y: yAxis 
-            }],layout
-            //{margin: {t:0}}    
-        );
-    }
+    var TIME_UNIT = 0.2; //ms
+    var numCycles = 10; //Used for plotly function
+    
     //-------------------------------------------------------------------
     /*Defining what happens when the receive button is clicked. This is meant
     to receive data from the test board and print to console*/
@@ -297,6 +254,7 @@ $(document).ready(function(){
 
             try{
             device = await navigator.usb.requestDevice({filters: [{vendorId:0x1F00}]})
+            //i+=2 because each loop processes a period and duty cycle
             for(var i=0; i<10; i+=2){
                 await connectDev(device);
 
@@ -317,6 +275,7 @@ $(document).ready(function(){
                     '<div>Duty Cycle received: ' + dCycle + '%</div><br>');
                 var elementID = 'plotly-test' + index.toString();
                 graphPlotly(per, dCycle/100, elementID, index);
+                gradeData(list[i],list[i+1],per, dCycle, TIME_UNIT,index);
                 index++;
             }
         }
@@ -331,4 +290,83 @@ $(document).ready(function(){
         })
      }
 
+    //-------------------------------------------------------------------
+    /*This function will create a plotly graph.
+    *@param {float} period - The period measured from the board
+    *@param {float} dutyCycle - The duty cycle measured from the board
+    *@param {string} id - The ID tag of the <div> element that will hold the graph
+    *@param {int} index - The number of the test case, eg. Test case 1, Test case 2, etc
+    */
+    function graphPlotly(period, dutyCycle, id, index){
+        let test = document.getElementById(id);
+        var xAxis = [];
+        var yAxis = [];
+        var sumX = 0;
+        var sumY = 0;
+        //Creating the x values of the points
+        for(var i=0; i<numCycles;++i){
+            xAxis.push(period*(i));
+            xAxis.push(period*(i) + period*dutyCycle);
+            xAxis.push(period*(i) + period*dutyCycle);
+            xAxis.push(period*(i+1));
+        }
+        //Creating the y values of the points
+        for(var i=0;i<numCycles/2;++i)
+        {
+            yAxis.push(1);
+            yAxis.push(1);
+            yAxis.push(0);
+            yAxis.push(0);
+        }
+        var layout = {
+            title: 'Test Case ' + index.toString(),
+            xaxis:{
+                title: 'Time (ms)'
+            }            
+        };
+        Plotly.plot(test, [{
+            x: xAxis,
+            y: yAxis 
+            }],layout
+            //{margin: {t:0}}    
+        );
+    }
+
+    //-------------------------------------------------------------------
+    /*This function grades a set of received data
+    *@param {String} binaryPer - The binary of the period that was sent to the board
+    *@param {String} binaryDuty - The binary of the duty cycle that was sent to the board
+    *@param {Float} receivedPer - The measured period
+    *@param {Float} receivedDuty - The measured duty cycle
+    *@param {Float} timeUnit - The minimum time unit by which the grading algorithm will be determined
+    *@param {Int} testCase - The number test case that it is
+    */
+    function gradeData(binaryPer,binaryDuty,receivedPer,receivedDuty, timeUnit, testCase)
+    {
+        var expectedPer = (parseInt(binaryPer, 2) + 1)*10;
+        var expectedDuty = parseInt(binaryDuty,2);     
+        var periodRemainder = Math.abs((expectedPer - receivedPer)/timeUnit);
+        console.log(periodRemainder);
+        if(periodRemainder < 1) //Checking if error was within one time unit
+        {
+            console.log("For test case " + testCase + " you received 100%.");
+        }
+        else
+        {
+            var penalty = 3*(periodRemainder - 1)*(periodRemainder - 1); //squaring it
+            if(penalty >= 100) //Checking if error exceeds 100%
+            {
+                console.log('You received no credit for test case ' + testCase);
+            }
+            else
+            {
+                console.log('You received ' + (100 - penalty) + '% for test case ' + testCase);
+            }
+        }
+
+    }
+
+//Entire program needs to be in bracket below
 })
+   
+
