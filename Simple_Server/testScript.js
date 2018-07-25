@@ -116,7 +116,7 @@ $(document).ready(function(){
     let runAll = document.getElementById('test-cases');
     var SIG_FIGS = 5;
     var TIME_UNIT = 0.2; //ms
-    var numCycles = 10; //Used for plotly function
+    var NUM_CYCLES = 10; //Used for plotly function
     
     //-------------------------------------------------------------------
     /*Defining what happens when the receive button is clicked. This is meant
@@ -226,6 +226,7 @@ $(document).ready(function(){
         $(runAll).click(async () => {
             let device;
             //Define all periods and duty cycles in binary
+            var NUM_CASES = 5;
             var per1 = '01111'; //160ms
             var duty1 = '0110010'; //50%
             var per2 = '01011'; //120ms
@@ -244,7 +245,7 @@ $(document).ready(function(){
             disableButtons(true);
             try{
                 device = await navigator.usb.requestDevice({filters: [{vendorId:0x1F00}]})
-                for(var i=0; i<numCycles; i+=1){
+                for(var i=0; i<NUM_CASES; i+=1){
                     var elementID = 'plotly-test' + index.toString(); //Get which test case this is
                     await connectDev(device);
                     //Send period followed by duty cycle to test board
@@ -253,10 +254,9 @@ $(document).ready(function(){
                     //Store time stamp of period then duty cycle to results
                     perResults[i] = await receiveData(device);
                     dutyResults[i] = await receiveData(device);
-                    console.log(perResults[i].toString());
-                    if(perResults[i].toString() == 'TIMEOUT'){
+                    if(perResults[i].charAt(0) == 'T'){
                         $('#' + elementID).after('<div>There was a TIMEOUT ERROR while processing ' +
-                            'test case ' + index + '</div>');
+                            'test case ' + index + '. Please reset the tester board.</div>');
                     }
                     else{
                         //Convert results into floats
@@ -309,17 +309,15 @@ $(document).ready(function(){
         let test = document.getElementById(id);
         var xAxis = [];
         var yAxis = [];
-        var sumX = 0;
-        var sumY = 0;
         //Creating the x values of the points
-        for(var i=0; i<numCycles;++i){
+        for(var i=0; i<NUM_CYCLES;++i){
             xAxis.push(period*(i));
             xAxis.push(period*(i) + period*dutyCycle);
             xAxis.push(period*(i) + period*dutyCycle);
             xAxis.push(period*(i+1));
         }
         //Creating the y values of the points
-        for(var i=0;i<numCycles/2;++i)
+        for(var i=0;i<NUM_CYCLES;++i)
         {
             yAxis.push(1);
             yAxis.push(1);
