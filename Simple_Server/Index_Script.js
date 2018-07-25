@@ -90,7 +90,7 @@ $(document).ready(function(){
     document.addEventListener('DOMContentLoaded', async () => {
         let devices = await navigator.usb.getDevices();
         devices.forEach(device => {
-        console.log('Get Devices pass');// Add |device| to the UI.
+        console.log('Device already connected');// Add |device| to the UI.
         });
     });
 
@@ -98,7 +98,7 @@ $(document).ready(function(){
     /*Used to detect when a USB device is connected. NOTE: Connected means that
     a new USB device is connected to the PC, not that a device is opened by WebUSB.*/
     navigator.usb.addEventListener('connect', event => {
-        console.log('Device connected');// Add |event.device| to the UI.
+        console.log('New device connected');// Add |event.device| to the UI.
     });
 
     //-------------------------------------------------------------------
@@ -111,8 +111,6 @@ $(document).ready(function(){
     /*Define all buttons/variables beforehand*/
     let receive = document.getElementById('request-device');
     let send = document.getElementById('send');
-    let blinky2 = document.getElementById('blinky2');
-    let blinky1 = document.getElementById('blinky1');
     let runAll = document.getElementById('test-cases');
     var SIG_FIGS = 5;
     var TIME_UNIT = 0.2; //ms
@@ -133,7 +131,7 @@ $(document).ready(function(){
                 await connectDev(device);//Connect the device
                 await receiveData(device);//Receive data from device
             } catch (err){
-                console.log('No Device was selected in receive');//No device was selected.
+                console.log(err);//Error occured
             }
             disableButtons(false);
         })
@@ -162,56 +160,6 @@ $(document).ready(function(){
                 await receiveData(device);
                 await closeDev(device);
             } catch(err){
-                console.log('No Device was selected' + err);
-            }
-            disableButtons(false);
-        })
-    }
-
-    //-------------------------------------------------------------------
-    /*Defines what happens when Download Blinky2 button is clicked. This 
-    downloads a program that simply causes LED1 to blink. Transferring this file 
-    should cause the test baord to reset itself.*/
-    if(blinky2){
-        $(blinky2).click(async()=>{
-            let device;
-            try{
-                disableButtons(true);
-                //Select the device
-                device = await navigator.usb.requestDevice({filters: [{vendorId:0x1F00}]})
-                await connectDev(device);
-                console.log("blinky2");
-                //Send RESET to the testboard to have the testboard reset itself
-                await sendData(device, 'RESET');
-                console.log('sent');
-                await closeDev(device);
-            }
-            catch(err){
-                console.log(err);
-            }
-            disableButtons(false);
-        })
-    }
-
-    //-------------------------------------------------------------------
-    /*Defines what happens when Download Blinky button is clicked. This
-    downloads a program that simply causes LED3 to blink. Transferring this file 
-    should cause the test baord to reset itself.*/
-    if(blinky1){
-        $(blinky1).click(async()=>{
-            let device;
-            try{
-                disableButtons(true);
-                //Select the device
-                device = await navigator.usb.requestDevice({filters: [{vendorId:0x1F00}]})
-                await connectDev(device);
-                console.log("blinky1");
-                //Send RESET to test board to have it reset itself
-                await sendData(device, 'RESET');
-                console.log('sent');
-                await closeDev(device);
-            }
-            catch(err){
                 console.log(err);
             }
             disableButtons(false);
@@ -266,24 +214,30 @@ $(document).ready(function(){
                         var expectedDuty = parseInt(dutyList[i],2);
                         var periodRemainder = getTimeUnits(expectedPer,per,TIME_UNIT).toFixed(SIG_FIGS);
                         var grade = gradeData(periodRemainder, expectedDuty, dCycle)
+                        
+                        //finalResult is what will be saved on server side for teach access
                         var finalResult = 'Test Case: ' + index + '\n' +
                             'Period received: ' + per + 'ms\n' +
                             'Duty Cycle received: ' + dCycle + '%\n' +
                             'Number of time units off: ' + periodRemainder + '\n' +
                             'Grade: ' + grade + '%\n' + '\n' + '\n' ;
+
+                        //Run recordGrades.php to save grades
                         $.ajax({
-                            type: 'POST',
-                            url: 'testFolder/foo.php',
-                            data: { text1: finalResult},
-                            success: function(response) {
+                            type: 'POST', //POST to send data to php file
+                            url: 'serverFiles/recordGrades.php', //what file to run
+                            data: { submission: finalResult}, //what data to send
+                            success: function(response) {     //Run this function if successful
                                 console.log('Saved Results');
                             }
                         });
+
+                        //Append results to browser
                         $('#' + elementID).after('<div>Test Case: ' + index + '</div>' +
                             '<div>Period received: ' + per + 'ms</div>' +
                             '<div>Duty Cycle received: ' + dCycle + '%</div>' +
                             '<div>Number of time units off: ' + periodRemainder + '</div>' +
-                            '<div>Grade: ' + grade + '%</div><br>');
+                            '<div>Grade: ' + grade + '%</div><br>'); 
                         graphPlotly(per, dCycle/100, elementID, index);
                     }
                     index++;
