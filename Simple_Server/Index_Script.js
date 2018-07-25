@@ -109,13 +109,89 @@ $(document).ready(function(){
 
     //-------------------------------------------------------------------    
     /*Define all buttons/variables beforehand*/
+    let select = document.getElementById('select');
     let receive = document.getElementById('request-device');
     let send = document.getElementById('send');
     let runAll = document.getElementById('test-cases');
+    let blinky1 = document.getElementById('blinky1');
+    let blinky2 = document.getElementById('blinky2');
+    let blinky3 = document.getElementById('blinky3');
     var SIG_FIGS = 5;
     var TIME_UNIT = 0.2; //ms
     var NUM_CYCLES = 10; //Used for plotly function
-    
+    let device;
+
+    //-------------------------------------------------------------------
+    /*Defining what happens when the blinky1 button is clicked. This is meant to
+    simulate picking an assignment. It will tell the device what assignment is to
+    be graded.*/
+    if(blinky1){
+        $(blinky1).click(async()=>{
+            try{
+                disableButtons(true);
+                await connectDev(device);
+                await sendData(device, 1); //Indicate this is blinky1 assignment with 1
+                await closeDev(device);
+            } catch(err){
+                console.log(err);
+            }
+            disableButtons(false);
+        })
+    }
+
+    //-------------------------------------------------------------------
+    /*Defining what happens when the blinky2 button is clicked. This is meant to
+    simulate picking an assignment. It will tell the device what assignment is to
+    be graded.*/
+    if(blinky2){
+        $(blinky2).click(async()=>{
+            try{
+                disableButtons(true);
+                await connectDev(device);
+                await sendData(device, 2); //Indicate this is blinky2 assignment with 2
+                await closeDev(device);
+            } catch(err){
+                console.log(err);
+            }
+            disableButtons(false);
+        })
+    }
+
+    //-------------------------------------------------------------------
+    /*Defining what happens when the blinky3 button is clicked. This is meant to
+    simulate picking an assignment. It will tell the device what assignment is to
+    be graded.*/
+    if(blinky3){
+        $(blinky3).click(async()=>{
+            try{
+                disableButtons(true);
+                await connectDev(device);
+                await sendData(device, 3); //Indicate this is blinky3 assignment with 3
+                await closeDev(device);
+            } catch(err){
+                console.log(err);
+            }
+            disableButtons(false);
+        })
+    }
+    //-------------------------------------------------------------------
+    /*Defining what happens when the select button is clicked. This is meant
+    to select which device will be communicating with the browser*/
+    if(select){
+        $(select).click(async()=>{
+            try{
+                disableButtons(true);
+                console.log("Device being selected");
+                device = await navigator.usb.requestDevice({filters: [{vendorId:0x1F00}]});
+                console.log('Device selected');
+            } catch(err){
+                console.log(err);
+            }
+            disableButtons(false);
+        })
+    }
+
+
     //-------------------------------------------------------------------
     /*Defining what happens when the receive button is clicked. This is meant
     to receive data from the test board and print to console*/
@@ -123,13 +199,11 @@ $(document).ready(function(){
     if(receive){
         //What happens when the button is clicked
         $(receive).click(async() => {
-            let device;
             try {
                 disableButtons(true);
-                //Have user select device
-                device = await navigator.usb.requestDevice({filters: [{vendorId:0x1F00}]})
                 await connectDev(device);//Connect the device
                 await receiveData(device);//Receive data from device
+                await closeDev(device);//Close the device
             } catch (err){
                 console.log(err);//Error occured
             }
@@ -143,14 +217,11 @@ $(document).ready(function(){
     stamps measured by the test baord for the period and duty cycle.*/
     if(send){
         $(send).click(async() => {
-            let device;
             //Get values period and duty cycle entered by user
             var period = $('#per').val();
             var dutyCycle = $('#dutyCycle').val();            
             try{
-                //Select device
                 disableButtons(true);
-                device = await navigator.usb.requestDevice({filters: [{vendorId:0x1F00}]})
                 await connectDev(device);
                 //Send period and duty cycle to device
                 await sendData(device,period); //Currently, sendData also receives data to test it
@@ -172,7 +243,7 @@ $(document).ready(function(){
     formatted to be displayed on the browser.*/
     if (runAll){
         $(runAll).click(async () => {
-            let device;
+            //let device;
             //Define all periods and duty cycles in binary
             var NUM_CASES = 5;
             var per1 = '01111'; //160ms
@@ -191,14 +262,14 @@ $(document).ready(function(){
             var dutyResults = []
             var index = 1;  //Keeps track of what test case we are on
             var finalResult = '';
-            var lastName = 'last';
-            var firstName = 'first';
+            var lastName = 'last'; //Used to store last name of student
+            var firstName = 'first'; //Used to store first name of student
             disableButtons(true);
             try{
-                device = await navigator.usb.requestDevice({filters: [{vendorId:0x1F00}]})
+                await connectDev(device);
+                await sendData(device,0); //Tell device this is assignment 0
                 for(var i=0; i<NUM_CASES; i+=1){
                     var elementID = 'plotly-test' + index.toString(); //Get which test case this is
-                    await connectDev(device);
                     //Send period followed by duty cycle to test board
                     await sendData(device, perList[i]);
                     await sendData(device, dutyList[i]);
@@ -242,6 +313,7 @@ $(document).ready(function(){
                         console.log('Saved Results');
                     }
                 });
+                await closeDev(device);
             }
             catch(err){
                 console.log(err);
