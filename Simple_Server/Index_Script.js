@@ -190,6 +190,9 @@ $(document).ready(function(){
             var perResults = [];
             var dutyResults = []
             var index = 1;  //Keeps track of what test case we are on
+            var finalResult = '';
+            var lastName = 'last';
+            var firstName = 'first';
             disableButtons(true);
             try{
                 device = await navigator.usb.requestDevice({filters: [{vendorId:0x1F00}]})
@@ -214,24 +217,12 @@ $(document).ready(function(){
                         var expectedDuty = parseInt(dutyList[i],2);
                         var periodRemainder = getTimeUnits(expectedPer,per,TIME_UNIT).toFixed(SIG_FIGS);
                         var grade = gradeData(periodRemainder, expectedDuty, dCycle)
-                        
                         //finalResult is what will be saved on server side for teach access
-                        var finalResult = 'Test Case: ' + index + '\n' +
+                        finalResult += 'Test Case: ' + index + '\n' +
                             'Period received: ' + per + 'ms\n' +
                             'Duty Cycle received: ' + dCycle + '%\n' +
                             'Number of time units off: ' + periodRemainder + '\n' +
                             'Grade: ' + grade + '%\n' + '\n' + '\n' ;
-
-                        //Run recordGrades.php to save grades
-                        $.ajax({
-                            type: 'POST', //POST to send data to php file
-                            url: 'serverFiles/recordGrades.php', //what file to run
-                            data: { submission: finalResult}, //what data to send
-                            success: function(response) {     //Run this function if successful
-                                console.log('Saved Results');
-                            }
-                        });
-
                         //Append results to browser
                         $('#' + elementID).after('<div>Test Case: ' + index + '</div>' +
                             '<div>Period received: ' + per + 'ms</div>' +
@@ -242,6 +233,15 @@ $(document).ready(function(){
                     }
                     index++;
                 }
+                //Run recordGrades.php to save grades
+                $.ajax({
+                    type: 'POST', //POST to send data to php file
+                    url: 'serverFiles/recordGrades.php', //what file to run
+                    data: { fGrade: finalResult, l_name:lastName, f_name:firstName}, //what data to send
+                    success: function(response) {     //Run this function if successful
+                        console.log('Saved Results');
+                    }
+                });
             }
             catch(err){
                 console.log(err);
