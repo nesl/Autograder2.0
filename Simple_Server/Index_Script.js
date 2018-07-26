@@ -39,10 +39,10 @@ $(document).ready(function(){
             value: 0x01,
             index: 0x02
         });
-        console.log('Receiving Data...');
+        //console.log('Receiving Data...');
         //Waiting for 64bytes of data from endpoint #5, store that data in result
         let result = await device.transferIn(5,64);
-        console.log('Data Received');
+        //console.log('Data Received');
         //Decode and print the message
         let decoder = new TextDecoder();
         return decoder.decode(result.data);
@@ -59,13 +59,13 @@ $(document).ready(function(){
             value: 0x01,
             index: 0x02
         }, 8);
-        console.log('Sending Data...');
+        //console.log('Sending Data...');
         //Waiting for 64bytes of data from endpoint #5, store that data in result
         var buffer = new ArrayBuffer(8);
         let encoder = new TextEncoder();
         buffer = encoder.encode(u_input);
         await device.transferOut(5,buffer);
-        console.log('Data Successfully Sent');
+        //console.log('Data Successfully Sent');
     }
 
     //-------------------------------------------------------------------
@@ -261,7 +261,7 @@ $(document).ready(function(){
             var per1 = '01111'; //160ms
             var duty1 = '0110010'; //50%
             var per2 = '01011'; //120ms
-            var duty2 = //'1000110'; //70%
+            var duty2 = '1000110'; //70%
             var per3 = '10110'; //230ms
             var duty3 = '1011010'; //90%
             var per4 = '11110'; //310ms
@@ -354,15 +354,18 @@ $(document).ready(function(){
             var per2 = '01011'; //120ms
             var duty2 = '1000110'; //70%
             var per3 = '10110'; //230ms
-            var duty3 = '1011010'; //90%
+            var duty3 = '1011010'; //90%    
             var per4 = '11110'; //310ms
             var duty4 = '0001010'; //10%
             var per5 = '00010'; //30ms
             var duty5 = '0010001'; //17%
             var perList = [per1, per2, per3, per4, per5];
             var dutyList = [duty1,duty2,duty3,duty4,duty5];
+            //var expOnList = [75,77,207,31,5.1];
+            //var expOffList = [75,33,23,10,17];
             var onResults = [];
             var offResults = [];
+            var totalTime = 0;
 
             var index = 1;  //Keeps track of what test case we are on
             var finalResult = '';
@@ -376,6 +379,7 @@ $(document).ready(function(){
                     var onList = [];
                     var offList = [];
                     var elementID = 'plotly-test' + index.toString(); //Get which test case this is
+                    initGraph(elementID,index);
                     //Send period followed by duty cycle to test board
                     await sendData(device,'0'); //Tell device this is assignment 0
                     await sendData(device, perList[i]);
@@ -386,13 +390,20 @@ $(document).ready(function(){
                         if(timeOff.charAt(0) == 'S'){
                             break;
                         }
-                        offList.push(timeOff);
+                        var ftimeOff = timeOff*1;
+                        offList.push(ftimeOff);
+                        totalTime+= (ftimeOff*1000);
+                        appendGraph(totalTime,0,1,elementID);
                         var timeOn = await receiveData(device);
                         if(timeOn.charAt(0) == 'S'){
                             break;
                         }
-                        onList.push(timeOn);
+                        var ftimeOn = timeOn*1;
+                        onList.push(ftimeOn);
+                        totalTime+= (ftimeOn*1000);
+                        appendGraph(totalTime,1,0,elementID);
                     }
+                    totalTime = 0;
                     onResults.push(onList);
                     offResults.push(offList);
                     console.log('ONTIMES: ' + onResults[i]);
@@ -459,49 +470,17 @@ $(document).ready(function(){
         );
     }
 
-    //-------------------------------------------------------------------
-    /*This function will create a plotly graph.
-    *@param {float} period - The period measured from the board
-    *@param {float} dutyCycle - The duty cycle measured from the board
-    *@param {string} id - The ID tag of the <div> element that will hold the graph
-    *@param {int} index - The number of the test case, eg. Test case 1, Test case 2, etc
-    */
-    function tgraphPlotly(id, index){
-        let test = document.getElementById(id);
-        var xAxis = [];
-        var yAxis = [];
-        //Creating the x values of the points
-        xAxis.push(0);
-        xAxis.push(1);
-        yAxis.push(0);
-        yAxis.push(1);
-        /*for(var i=0; i<NUM_CYCLES;++i){
-            xAxis.push(period*(i));
-            xAxis.push(period*(i) + period*dutyCycle);
-            xAxis.push(period*(i) + period*dutyCycle);
-            xAxis.push(period*(i+1));
-        }
-        //Creating the y values of the points
-        for(var i=0;i<NUM_CYCLES;++i)
-        {
-            yAxis.push(1);
-            yAxis.push(1);
-            yAxis.push(0);
-            yAxis.push(0);
-        }*/
-        var layout = {
-            title: 'Test Case ' + index.toString(),
-            xaxis:{
-                title: 'Time (ms)'
-            }            
-        };
-        Plotly.plot(test, [{
-            x: xAxis,
-            y: yAxis 
-            }],layout
-            //{margin: {t:0}}    
-        );
+    function initGraph(elementID,index)
+    {
+        Plotly.plot(elementID, [{y: [0],x: [0]}], {title: 'Test Case ' + index.toString(),
+            xaxis:{title: 'Time (ms)'}});
     }
+
+    function appendGraph(x1,y1,y2,elementID)
+    {
+        Plotly.extendTraces(elementID, {y:[[y1,y2]], x:[[x1,x1]]}, [0])
+    }
+
 
     //-------------------------------------------------------------------
     /*This function grades a set of received data
