@@ -130,7 +130,7 @@ $(document).ready(function(){
             try{
                 disableButtons(true);
                 await connectDev(device);
-                await sendData(device, 1); //Indicate this is blinky1 assignment with 1
+                await sendData(device, '1'); //Indicate this is blinky1 assignment with 1
                 await closeDev(device);
             } catch(err){
                 console.log(err);
@@ -148,7 +148,7 @@ $(document).ready(function(){
             try{
                 disableButtons(true);
                 await connectDev(device);
-                await sendData(device, 2); //Indicate this is blinky2 assignment with 2
+                await sendData(device, '2'); //Indicate this is blinky2 assignment with 2
                 await closeDev(device);
             } catch(err){
                 console.log(err);
@@ -166,7 +166,7 @@ $(document).ready(function(){
             try{
                 disableButtons(true);
                 await connectDev(device);
-                await sendData(device, 3); //Indicate this is blinky3 assignment with 3
+                await sendData(device, '3'); //Indicate this is blinky3 assignment with 3
                 await closeDev(device);
             } catch(err){
                 console.log(err);
@@ -227,8 +227,19 @@ $(document).ready(function(){
                 await sendData(device,period); //Currently, sendData also receives data to test it
                 await sendData(device,dutyCycle);
                 //Receive period and duty cycle measured from test board
-                await receiveData(device);
-                await receiveData(device);
+                var perResult = await receiveData(device);
+                var dutyResult = await receiveData(device);
+                if(perResult.charAt(0) == 'T'){
+                        $('#' + elementID).after('<div>There was a TIMEOUT ERROR while processing ' +
+                            'test case ' + index + '. Please reset the tester board.</div>');
+                }
+                else{
+                    var per = (parseFloat(perResult) * 1000).toFixed(SIG_FIGS);; //Convert from seconds to ms
+                    var dCycle = (parseFloat(dutyResult) * 100).toFixed(SIG_FIGS);
+                    $('#' + elementID).after(       '<div>Period received: ' + per + 'ms</div>' +
+                            '<div>Duty Cycle received: ' + dCycle + '%</div>');
+                }
+
                 await closeDev(device);
             } catch(err){
                 console.log(err);
@@ -266,16 +277,20 @@ $(document).ready(function(){
             var firstName = 'first'; //Used to store first name of student
             disableButtons(true);
             try{
+                //device = await navigator.usb.requestDevice({filters: [{vendorId:0x1F00}]});
                 await connectDev(device);
-                await sendData(device,0); //Tell device this is assignment 0
                 for(var i=0; i<NUM_CASES; i+=1){
                     var elementID = 'plotly-test' + index.toString(); //Get which test case this is
                     //Send period followed by duty cycle to test board
+                    await sendData(device,'0'); //Tell device this is assignment 0
                     await sendData(device, perList[i]);
                     await sendData(device, dutyList[i]);
                     //Store time stamp of period then duty cycle to results
                     perResults[i] = await receiveData(device);
+                    console.log('Received ' + perResults[i]);
                     dutyResults[i] = await receiveData(device);
+                    console.log("Made it here on case " + index);
+                    console.log(perResults[i]);
                     if(perResults[i].charAt(0) == 'T'){
                         $('#' + elementID).after('<div>There was a TIMEOUT ERROR while processing ' +
                             'test case ' + index + '. Please reset the tester board.</div>');
@@ -402,4 +417,3 @@ $(document).ready(function(){
 //Entire program needs to be in bracket below
 })
    
-

@@ -4,16 +4,21 @@
 
 #include <string>
 #include <sstream>
+#include <iomanip>
 
 //Needed for read buffer
 #define MAX_BUF_SIZE (1024)
 #define NUM_PERIOD_PINS (5)
 #define NUM_DUTY_CYCLE_PINS (7)
-#define SIG_FIGS (8)
+#define SIG_FIGS (10)
 #define MIN_TIME_UNIT (.0002) //ms
 #define NUM_TIME_UNITS (25000)
 #define RECORDING_TIME (MIN_TIME_UNIT * NUM_TIME_UNITS)
 
+//LED's
+DigitalOut led1(LED1);
+DigitalOut led2(LED2);
+DigitalOut led3(LED3);
 
 //PWM Pins
 InterruptIn PWM_API(p27); //Using built in function
@@ -43,6 +48,9 @@ DigitalOut dutyList[] = {MSD, DC2, DC3, DC4, DC5, DC6, LSD}; //List of duty cycl
 Serial pc(USBTX, USBRX);
 
 //Helper Function Prototypes; Definitions below main
+void assignmentOne(void);
+int readCommand(void);
+void sendError(void);
 void sendBinary(uint8_t buffer[], DigitalOut list[], int size);
 void time(float &period, float &duty);
 void convertFloatToBuf(float num, uint8_t buf[], int sigFigs);
@@ -52,48 +60,67 @@ void readDataFromBrowser(uint8_t * buffer, uint32_t & len);
 
 //USB object
 WebUSBCDC webUSB(0x1F00,0x2012,0x0001, false);
+
 int main() 
 {
     while(1) 
     {
-        float period = 0;
-        float duty = 0;
-        uint32_t lenPer, lenDuty; //Leave undeclared, or else read function will not work
-        uint8_t * perBuf1, * dutyBuf1;
-        perBuf1 = new uint8_t[MAX_BUF_SIZE]; //Dynamically allocated because read function prefers it
-        dutyBuf1 = new uint8_t[MAX_BUF_SIZE];
-        readDataFromBrowser(perBuf1, lenPer); //Storing binary from browser into buffer
-        readDataFromBrowser(dutyBuf1, lenDuty);
-        sendBinary(perBuf1, perList, NUM_PERIOD_PINS); //Sends data for other board to interpret
-        sendBinary(dutyBuf1, dutyList, NUM_DUTY_CYCLE_PINS);
-        req = 1; //Send signal for other board to generate waves
-        time(period, duty); //Period and duty cycle will be returned by reference
-        req = 0; //Set signal to 0 so that it can rise again
-        delete [] perBuf1; //Deallocating memory
-        delete [] dutyBuf1;
-        perBuf1 = 0; //Dereference pointers
-        dutyBuf1 = 0; 
-        if(period<=0)//Period is returned as -1 if a timeout error occurs
+        int choice = readCommand();
+        if(choice == 0)
         {
-            uint8_t errBuf1[] = {'T','I','M','E','O','U','T'};
-            uint8_t errBuf2[] = {'E','R','R','O','R'};
-            writeToBrowser(errBuf1);
-            writeToBrowser(errBuf2);
+            //pc.printf("Assignment one\r\n");
+            assignmentOne();
         }
+        else if(choice == 1)
+            led1 = !led1;
+        else if(choice == 2)
+            led2 = !led2;
+        else if(choice == 3)
+            led3 = !led3;
         else
         {
-            uint8_t *perBuf, *dutyBuf; 
-            perBuf = new uint8_t[SIG_FIGS];
-            dutyBuf = new uint8_t[SIG_FIGS];
-            convertFloatToBuf(period, perBuf, SIG_FIGS);
-            convertFloatToBuf(duty, dutyBuf, SIG_FIGS);
-            writeToBrowser(perBuf);
-            writeToBrowser(dutyBuf);
-            delete [] perBuf; //Deallocate memory
-            delete [] dutyBuf;
-            perBuf = 0; //Dereference pointers
-            dutyBuf = 0;
+            pc.printf("Command failed. Choice is %d \r\n", choice);
         }
+        
+    }
+}
+//-----------------------------------------------------------
+void assignmentOne(void)
+{
+    float period = 0;
+    float duty = 0;
+    uint32_t lenPer, lenDuty; //Leave undeclared, or else read function will not work
+    uint8_t * perBuf1, * dutyBuf1;
+    perBuf1 = new uint8_t[MAX_BUF_SIZE]; //Dynamically allocated because read function prefers it
+    dutyBuf1 = new uint8_t[MAX_BUF_SIZE];
+    readDataFromBrowser(perBuf1, lenPer); //Storing binary from browser into buffer
+    readDataFromBrowser(dutyBuf1, lenDuty);
+    sendBinary(perBuf1, perList, NUM_PERIOD_PINS); //Sends data for other board to interpret
+    sendBinary(dutyBuf1, dutyList, NUM_DUTY_CYCLE_PINS);
+    req = 1; //Send signal for other board to generate waves
+    time(period, duty); //Period and duty cycle will be returned by reference
+    req = 0; //Set signal to 0 so that it can rise again
+    delete [] perBuf1; //Deallocating memory
+    delete [] dutyBuf1;
+    perBuf1 = 0; //Dereference pointers
+    dutyBuf1 = 0; 
+    if(period<=0)//Period is returned as -1 if a timeout error occurs
+    {
+        sendError();
+    }
+    else
+    {
+        uint8_t *perBuf, *dutyBuf; 
+        perBuf = new uint8_t[SIG_FIGS];
+        dutyBuf = new uint8_t[SIG_FIGS];
+        convertFloatToBuf(period, perBuf, SIG_FIGS);
+        convertFloatToBuf(duty, dutyBuf, SIG_FIGS);
+        writeToBrowser(perBuf);
+        writeToBrowser(dutyBuf);
+        delete [] perBuf; //Deallocate memory
+        delete [] dutyBuf;
+        perBuf = 0; //Dereference pointers
+        dutyBuf = 0;
     }
 }
 //-----------------------------------------------------------
@@ -117,10 +144,12 @@ void time(float &period, float &duty) //Function that times board
     Timer timeOut;
     int numCycles = 0;
     timeOut.start(); //Start time out so that it can count while waiting for a fresh cycle
-    while (!PWM_API.read() && timeOut.read() < 10.0){}
-    while (PWM_API.read() && timeOut.read() < 10.0){} //These loops ensure that timing begins on a fresh cycle
+    pc.printf("Starting timing\r\n");
+    while (!PWM_API.read() && timeOut.read() < 5.0){}
+    while (PWM_API.read() && timeOut.read() < 5.0){} //These loops ensure that timing begins on a fresh cycle
     timeOut.stop();
-    if(timeOut.read() < 10.0)
+    pc.printf("Got here. Timeout is %f\r\n",timeOut.read());
+    if(timeOut.read() <= 4.9)
     {
         while (!PWM_API.read() && timeOut.read() < 10.0){}
         while (PWM_API.read() && timeOut.read() < 10.0){}
@@ -133,6 +162,7 @@ void time(float &period, float &duty) //Function that times board
             onTime.stop();
             numCycles += 1;
         }
+        pc.printf("Made it here\r\n");
         totTime.stop();
         period = totTime.read() / numCycles;
         duty = onTime.read() / totTime.read();
@@ -147,6 +177,7 @@ void time(float &period, float &duty) //Function that times board
 void convertFloatToBuf(float num, uint8_t buf[], int sigFigs) //Converts a float to a uint8_t buffer to send
 {
     ostringstream oss;
+    oss << setprecision(sigFigs);
     oss << num;
     string key = oss.str(); //Converts float to string first
     for(int i=0;i<sigFigs;++i)
@@ -183,4 +214,36 @@ void readDataFromBrowser(uint8_t *buffer, uint32_t & len) //Reads data from brow
             read = true;
         } 
     }
+}
+//----------------------------------------------------------
+int readCommand(void)//receives the necessary command  
+{   
+    uint32_t len; //Leave undeclared, or else read function will not work
+    uint8_t * commandBuf;
+    commandBuf = new uint8_t[MAX_BUF_SIZE]; //Dynamically allocated because read function prefers it
+    readDataFromBrowser(commandBuf, len);
+    int choice = static_cast<int>(commandBuf[0]) - '0'; //Subtracting ascii value of 0 to get integer value
+    delete [] commandBuf;
+    commandBuf = 0;
+    return choice;
+}
+//----------------------------------------------------------
+void sendError(void)
+{
+    pc.printf("In error function\r\n");
+    uint8_t *errBuf1, *errBuf2;
+    errBuf1 = new uint8_t[MAX_BUF_SIZE];
+    errBuf2 = new uint8_t[MAX_BUF_SIZE];
+    string timeout = "TIMEOUT ";
+    string error = "ERROR!!!";
+    for(int i = 0;i < timeout.length();++i)
+        errBuf1[i] = static_cast<uint8_t>(timeout[i]);
+    for(int i = 0;i < error.length();++i)
+        errBuf2[i] = static_cast<uint8_t>(error[i]);
+    writeToBrowser(errBuf1);
+    writeToBrowser(errBuf2);
+    delete [] errBuf1;
+    delete [] errBuf2;
+    errBuf1 = 0;
+    errBuf2 = 0;
 }
