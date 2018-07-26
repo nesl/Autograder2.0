@@ -112,7 +112,8 @@ $(document).ready(function(){
     let select = document.getElementById('select');
     let receive = document.getElementById('request-device');
     let send = document.getElementById('send');
-    let runAll = document.getElementById('test-cases');
+    let runAll = document.getElementById('test-cases')
+    let liveGraph = document.getElementById('liveGraph');
     let blinky1 = document.getElementById('blinky1');
     let blinky2 = document.getElementById('blinky2');
     let blinky3 = document.getElementById('blinky3');
@@ -260,7 +261,7 @@ $(document).ready(function(){
             var per1 = '01111'; //160ms
             var duty1 = '0110010'; //50%
             var per2 = '01011'; //120ms
-            var duty2 = '1000110'; //70%
+            var duty2 = //'1000110'; //70%
             var per3 = '10110'; //230ms
             var duty3 = '1011010'; //90%
             var per4 = '11110'; //310ms
@@ -282,7 +283,7 @@ $(document).ready(function(){
                 for(var i=0; i<NUM_CASES; i+=1){
                     var elementID = 'plotly-test' + index.toString(); //Get which test case this is
                     //Send period followed by duty cycle to test board
-                    await sendData(device,'0'); //Tell device this is assignment 0
+                    await sendData(device,'4'); //Tell device this is assignment 0
                     await sendData(device, perList[i]);
                     await sendData(device, dutyList[i]);
                     //Store time stamp of period then duty cycle to results
@@ -293,7 +294,7 @@ $(document).ready(function(){
                     console.log(perResults[i]);
                     if(perResults[i].charAt(0) == 'T'){
                         $('#' + elementID).after('<div>There was a TIMEOUT ERROR while processing ' +
-                            'test case ' + index + '. Please reset the tester board.</div>');
+                            'test case ' + index + '.</div>');
                     }
                     else{
                         //Convert results into floats
@@ -328,6 +329,85 @@ $(document).ready(function(){
                         console.log('Saved Results');
                     }
                 });
+                await closeDev(device);
+            }
+            catch(err){
+                console.log(err);
+            }
+
+            index = 1; //Reset index for next time
+            disableButtons(false);
+        })
+    }
+
+    //-------------------------------------------------------------------
+    /*This is used to several test cases to the test board. The test cases are sent
+    and then the time stamps are received by the test board. These time stamps are 
+    formatted to be displayed on the browser.*/
+    if (liveGraph){
+        $(liveGraph).click(async () => {
+            //let device;
+            //Define all periods and duty cycles in binary
+            var NUM_CASES = 5;
+            var per1 = '01111'; //160ms
+            var duty1 = '0110010'; //50%
+            var per2 = '01011'; //120ms
+            var duty2 = '1000110'; //70%
+            var per3 = '10110'; //230ms
+            var duty3 = '1011010'; //90%
+            var per4 = '11110'; //310ms
+            var duty4 = '0001010'; //10%
+            var per5 = '00010'; //30ms
+            var duty5 = '0010001'; //17%
+            var perList = [per1, per2, per3, per4, per5];
+            var dutyList = [duty1,duty2,duty3,duty4,duty5];
+            var onResults = [];
+            var offResults = [];
+
+            var index = 1;  //Keeps track of what test case we are on
+            var finalResult = '';
+            var lastName = 'last'; //Used to store last name of student
+            var firstName = 'first'; //Used to store first name of student
+            disableButtons(true);
+            try{
+                //device = await navigator.usb.requestDevice({filters: [{vendorId:0x1F00}]});
+                await connectDev(device);
+                for(var i=0; i<NUM_CASES; i+=1){
+                    var onList = [];
+                    var offList = [];
+                    var elementID = 'plotly-test' + index.toString(); //Get which test case this is
+                    //Send period followed by duty cycle to test board
+                    await sendData(device,'0'); //Tell device this is assignment 0
+                    await sendData(device, perList[i]);
+                    await sendData(device, dutyList[i]);
+
+                    while(true){
+                        var timeOff = await receiveData(device);
+                        if(timeOff.charAt(0) == 'S'){
+                            break;
+                        }
+                        offList.push(timeOff);
+                        var timeOn = await receiveData(device);
+                        if(timeOn.charAt(0) == 'S'){
+                            break;
+                        }
+                        onList.push(timeOn);
+                    }
+                    onResults.push(onList);
+                    offResults.push(offList);
+                    console.log('ONTIMES: ' + onResults[i]);
+                    console.log('OFFTIMES: ' + offResults[i]);
+                    var period = await receiveData(device);
+                    console.log('Period: ' + period);
+                    var dutyCylce = await receiveData(device);
+                    console.log('Duty Cycle: ' + dutyCycle);
+                    if(period.charAt(0) == 'T'){
+                        $('#' + elementID).after('<div>There was a TIMEOUT ERROR while processing ' +
+                            'test case ' + index + '.</div>');
+                    }
+                    
+                    index++;
+                }
                 await closeDev(device);
             }
             catch(err){
@@ -380,6 +460,50 @@ $(document).ready(function(){
     }
 
     //-------------------------------------------------------------------
+    /*This function will create a plotly graph.
+    *@param {float} period - The period measured from the board
+    *@param {float} dutyCycle - The duty cycle measured from the board
+    *@param {string} id - The ID tag of the <div> element that will hold the graph
+    *@param {int} index - The number of the test case, eg. Test case 1, Test case 2, etc
+    */
+    function tgraphPlotly(id, index){
+        let test = document.getElementById(id);
+        var xAxis = [];
+        var yAxis = [];
+        //Creating the x values of the points
+        xAxis.push(0);
+        xAxis.push(1);
+        yAxis.push(0);
+        yAxis.push(1);
+        /*for(var i=0; i<NUM_CYCLES;++i){
+            xAxis.push(period*(i));
+            xAxis.push(period*(i) + period*dutyCycle);
+            xAxis.push(period*(i) + period*dutyCycle);
+            xAxis.push(period*(i+1));
+        }
+        //Creating the y values of the points
+        for(var i=0;i<NUM_CYCLES;++i)
+        {
+            yAxis.push(1);
+            yAxis.push(1);
+            yAxis.push(0);
+            yAxis.push(0);
+        }*/
+        var layout = {
+            title: 'Test Case ' + index.toString(),
+            xaxis:{
+                title: 'Time (ms)'
+            }            
+        };
+        Plotly.plot(test, [{
+            x: xAxis,
+            y: yAxis 
+            }],layout
+            //{margin: {t:0}}    
+        );
+    }
+
+    //-------------------------------------------------------------------
     /*This function grades a set of received data
     *@param {Float} periodRemainder - The number of time units the students answer was off by
     *@param {Float} expectedDuty - The decimal value of the binary number passed to the board for duty cycle
@@ -413,7 +537,5 @@ $(document).ready(function(){
     {
         return Math.abs((expectedPer - receivedPer)/minTimeUnit);
     }
-
 //Entire program needs to be in bracket below
 })
-   
