@@ -57,6 +57,7 @@ Serial pc(USBTX, USBRX);
 //Helper Function Prototypes; Definitions below main
 void assignmentOne(bool liveGraph);
 int readCommand(void);
+void sendAllData(float onList[], float offList[], int numCycles);
 void sendError(void);
 void sendBinary(uint8_t buffer[], DigitalOut list[], int size);
 void timeLiveGraph(float &period, float &duty); //Sends live timestamps of rises/falls
@@ -164,7 +165,9 @@ void timeLiveGraph(float &period, float &duty) //Function that times board
         Timer offTime; //Records time of fall
         float onDifference = 0; //Used to keep track of total onTime value from previous cycle
         float offDifference = 0; //Same as above, for offTime
-        uint8_t *onBuf, *offBuf; 
+        float *onList, *offList; 
+        onList = new float [MAX_BUF_SIZE];
+        offList = new float [MAX_BUF_SIZE];
         while (!PWM_API.read() && timeOut.read() < 10.0){}
         while (PWM_API.read() && timeOut.read() < 10.0){}
         totTime.start();
@@ -174,25 +177,16 @@ void timeLiveGraph(float &period, float &duty) //Function that times board
             while(!PWM_API.read() && timeOut.read() < 12.0){}
             offTime.stop();
             onTime.start();
-            //Write offTime while it's stopped
-            offBuf = new uint8_t[SIG_FIGS];
-            convertFloatToBuf(offTime.read() - offDifference, offBuf, SIG_FIGS);
-            writeToBrowser(offBuf);
+            offList[numCycles] = offTime.read() - offDifference;
             //Record difference from total offTime to current offTime
             offDifference = offTime.read();
-            delete [] offBuf;
-            offBuf = 0;
             
             while(PWM_API.read() && timeOut.read() < 12.0){}
             offTime.start();
             onTime.stop();
-            onBuf = new uint8_t[SIG_FIGS];
-            convertFloatToBuf(onTime.read() - onDifference, onBuf, SIG_FIGS);
-            writeToBrowser(onBuf);
-            onDifference = onTime.read();
-            delete [] onBuf; 
-            onBuf = 0;             
-            numCycles += 1;
+            onList[numCycles] = onTime.read() - onDifference;
+            onDifference = onTime.read();           
+            ++numCycles;
         }
         totTime.stop();
         if(timeOut.read() >= 11.9)
@@ -205,6 +199,11 @@ void timeLiveGraph(float &period, float &duty) //Function that times board
         period = totTime.read() / numCycles;
         duty = onTime.read() / totTime.read();
         }
+        sendAllData(onList,offList,numCycles);
+        delete [] onList;
+        delete [] offList;
+        onList = 0;
+        offList = 0;
         uint8_t * stop;
         stop = new uint8_t[SIG_FIGS];
         string stopString = "STOP";
@@ -220,6 +219,7 @@ void timeLiveGraph(float &period, float &duty) //Function that times board
         period = -1.0;
     }
 }
+
 //-----------------------------------------------------------
 void timeAvg(float &period, float &duty) //Function that times board
 {
@@ -338,4 +338,22 @@ void sendError(void)
     delete [] errBuf2;
     errBuf1 = 0;
     errBuf2 = 0;
+}
+//-----------------------------------------------------------
+void sendAllData(float onList[], float offList[], int numCycles)
+{
+    uint8_t *onBuffer, *offBuffer;
+    for(int i=0;i<numCycles;++i)
+    {
+            offBuffer = new uint8_t[SIG_FIGS];
+            onBuffer = new uint8_t[SIG_FIGS];
+            convertFloatToBuf(offList[i], offBuffer, SIG_FIGS);
+            convertFloatToBuf(onList[i], onBuffer, SIG_FIGS);
+            writeToBrowser(offBuffer);
+            writeToBrowser(onBuffer);
+            delete [] offBuffer;
+            delete [] onBuffer;
+            offBuffer = 0;
+            onBuffer = 0;
+    }
 }
