@@ -82,7 +82,7 @@ $(document).ready(function(){
     //-------------------------------------------------------------------
     /*This function disables/enables all buttons*/
     function disableButtons(flag){
-        $(':button').prop('disabled',flag); //Selects all buttons, sets diasabled to flag
+        $(':button').prop('disabled',flag); //Selects all buttons, sets disabled to flag
     }
 
     //-------------------------------------------------------------------
@@ -104,6 +104,8 @@ $(document).ready(function(){
     //-------------------------------------------------------------------
     /*Used to detect when a USB device is disconnected, look at note above.*/
     navigator.usb.addEventListener('disconnect', event => {
+        disableButtons(true);
+        $(select).attr('disabled',false);
         console.log('Device disconencted');// Remove |event.device| from the UI.
     });
 
@@ -121,7 +123,8 @@ $(document).ready(function(){
     var TIME_UNIT = 0.2; //ms
     var NUM_CYCLES = 10; //Used for plotly function
     let device;
-
+    disableButtons(true);
+    $(select).attr('disabled',false);
     //-------------------------------------------------------------------
     /*Defining what happens when the blinky1 button is clicked. This is meant to
     simulate picking an assignment. It will tell the device what assignment is to
@@ -185,10 +188,11 @@ $(document).ready(function(){
                 console.log("Device being selected");
                 device = await navigator.usb.requestDevice({filters: [{vendorId:0x1F00}]});
                 console.log('Device selected');
+                disableButtons(false);
             } catch(err){
                 console.log(err);
+                $(select).attr('disabled', false);
             }
-            disableButtons(false);
         })
     }
 
@@ -365,8 +369,14 @@ $(document).ready(function(){
             var duty5 = '0010001'; //17%
             var perList = [per1, per2, per3, per4, per5]; //Store all periods
             var dutyList = [duty1,duty2,duty3,duty4,duty5] //Store all duty cycles
-            var expOnList = [75,77,207,31,5.1]; //Stores expected on time for one cycle (ms)
-            var expOffList = [75,33,23,279,24.9]; //Stores expected off time for one cycle (ms)
+            var expOnList = []; //Stores expected on time for one cycle (ms)
+            var expOffList = []; //Stores expected off time for one cycle (ms)
+            for(var i=0;i<NUM_CASES;++i){ //Find expected values of period/duty Cycle
+                var tempPeriod = (parseInt(perList[i],2) + 1)*10; //Convert binary to period using formula from assignment
+                var tempDutyCycle = (parseInt(dutyList[i],2))/100; //Convert binary to percentage
+                expOnList[i] = tempPeriod * tempDutyCycle;
+                expOffList[i] = tempPeriod - expOnList[i];
+            }
             var onList = []; //Stores measured on time for each rise
             var offList = []; //Stores measured off time for each fall
             var totalTime = 0; //The total time elapsed
@@ -384,8 +394,9 @@ $(document).ready(function(){
                     var elementID = 'plotly-test' + index.toString(); //Get which test case this is
 
                     //Initialize the measured and expected graph
-                    initGraph(elementID,index);
-                    initGraph(elementID,index);
+                    initGraph(elementID,index, 'Your Results');
+                    initGraph(elementID,index, 'Expected Results');
+
 
                     //Send period followed by duty cycle to test board
                     await sendData(device,'0'); //Tell device this is assignment 0
@@ -434,13 +445,33 @@ $(document).ready(function(){
                     //Receive calculated period and duty cycle from device last
                     var period = await receiveData(device);
                     console.log('Period: ' + period);
-                    var dutyCylce = await receiveData(device);
-                    console.log('Duty Cycle: ' + dutyCycle);
+                    var dCycle = await receiveData(device);
+                    console.log('Duty Cycle: ' + dCycle);
 
                     //Check for timeOut error
                     if(period.charAt(0) == 'T'){
                         $('#' + elementID).after('<div>There was a TIMEOUT ERROR while processing ' +
                             'test case ' + index + '.</div>');
+                    }
+                    else{
+                        //finalResult is what will be saved on server side for teach access
+                        period *= 1000;
+                        dCycle *= 100;
+                        var expectedPer = (parseInt(perList[i], 2) + 1)*10;  //Get expected period for this test case
+                        var expectedDuty = parseInt(dutyList[i],2); //Get expected duty cycle for this test case
+                        var periodRemainder = getTimeUnits(expectedPer,period,TIME_UNIT).toFixed(SIG_FIGS);
+                        var grade = gradeData(periodRemainder, expectedDuty, dCycle);
+                        finalResult += 'Test Case: ' + index + '\n' +
+                            'Period received: ' + period + 'ms\n' +
+                            'Duty Cycle received: ' + dCycle + '%\n' +
+                            'Number of time units off: ' + periodRemainder + '\n' +
+                            'Grade: ' + grade + '%\n' + '\n' + '\n' ;
+                        //Append results to browser
+                        $('#' + elementID).after('<div>Test Case: ' + index + '</div>' +
+                            '<div>Period received: ' + period + 'ms</div>' +
+                            '<div>Duty Cycle received: ' + dCycle + '%</div>' +
+                            '<div>Number of time units off: ' + periodRemainder + '</div>' +
+                            '<div>Grade: ' + grade + '%</div><br>'); 
                     }
                     index++;
                 }
@@ -499,13 +530,15 @@ $(document).ready(function(){
     /*This function initializes a graph with a single point at (0,0)
     *@param {DOMelement} elementID - The HTML element where the graph will be created
     *@param {int} index - The current test case number
+    *@param {string} traceName - The name which will be given to the trace
     */
-    function initGraph(elementID,index)
+    function initGraph(elementID,index, traceName)
     {
         //Plotly.plot(element, data, layout)
-        Plotly.plot(elementID, [{y: [0],x: [0]}], {title: 'Test Case ' + index.toString(),
+        Plotly.plot(elementID, [{y: [0],x: [0], name: traceName}], {title: 'Test Case ' + index.toString(),
             xaxis:{title: 'Time (ms)'}});
     }
+
 
 
     //-------------------------------------------------------------------
