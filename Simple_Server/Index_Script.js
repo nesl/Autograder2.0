@@ -114,7 +114,6 @@ $(document).ready(function(){
     let select = document.getElementById('select');
     let receive = document.getElementById('request-device');
     let send = document.getElementById('send');
-    let runAll = document.getElementById('test-cases')
     let liveGraph = document.getElementById('liveGraph');
     let blinky1 = document.getElementById('blinky1');
     let blinky2 = document.getElementById('blinky2');
@@ -122,6 +121,10 @@ $(document).ready(function(){
     var SIG_FIGS = 5;
     var TIME_UNIT = 0.2; //ms
     var NUM_CYCLES = 10; //Used for plotly function
+    var MIN_PERIOD = 10; //Minimum period required (ms)
+    var MAX_PERIOD = 320; //Maximum period (ms)
+    var MIN_DUTY_CYCLE = 2; //Minimum Duty Cycle (percentage)
+    var MAX_DUTY_CYCLE = 98; //Maximum Duty Cycle (percentage)
     let device;
     disableButtons(true);
     $(select).attr('disabled',false);
@@ -224,16 +227,30 @@ $(document).ready(function(){
         $(send).click(async() => {
             //Get values period and duty cycle entered by user
             var period = $('#per').val();
-            var dutyCycle = $('#dutyCycle').val();            
+            var dutyCycle = $('#dutyCycle').val();
+            if (validate(period,dutyCycle)){
             try{
+                var bPeriod = perDecimaltoBinary(period);
+                var bDutyCycle = dCycleDecimaltoBinary(dutyCycle);
                 disableButtons(true);
                 await connectDev(device);
                 //Send period and duty cycle to device
-                await sendData(device,period); //Currently, sendData also receives data to test it
-                await sendData(device,dutyCycle);
+                await sendData(device,'0');
+                await sendData(device,bPeriod); //Currently, sendData also receives data to test it
+                await sendData(device,bDutyCycle);
                 //Receive period and duty cycle measured from test board
+                while(true){
+                    var dummy = await receiveData(device);
+                    console.log(dummy);
+                    if(dummy.charAt(0) == 'S'){ //check that the device is still sending data
+                            break; //Break from the loop if there is no more data
+                        }
+                }
                 var perResult = await receiveData(device);
                 var dutyResult = await receiveData(device);
+                console.log(perResult);
+                console.log(dutyResult);
+                var elementID = 'user-graph';
                 if(perResult.charAt(0) == 'T'){
                         $('#' + elementID).after('<div>There was a TIMEOUT ERROR while processing ' +
                             'test case ' + index + '. Please reset the tester board.</div>');
@@ -250,99 +267,7 @@ $(document).ready(function(){
                 console.log(err);
             }
             disableButtons(false);
-        })
-    }
-
-    //-------------------------------------------------------------------
-    /*This is used to several test cases to the test board. The test cases are sent
-    and then the time stamps are received by the test board. These time stamps are 
-    formatted to be displayed on the browser.*/
-    if (runAll){
-        $(runAll).click(async () => {
-            //let device;
-            //Define all periods and duty cycles in binary
-            var NUM_CASES = 5;
-            var per1 = '01111'; //160ms
-            var duty1 = '0110010'; //50%
-            var per2 = '01011'; //120ms
-            var duty2 = '1000110'; //70%
-            var per3 = '10110'; //230ms
-            var duty3 = '1011010'; //90%
-            var per4 = '11110'; //310ms
-            var duty4 = '0001010'; //10%
-            var per5 = '00010'; //30ms
-            var duty5 = '0010001'; //17%
-            var perList = [per1, per2, per3, per4, per5]; //Store all periods
-            var dutyList = [duty1,duty2,duty3,duty4,duty5] //Store all duty cycles
-            var perResults = [];  //Will store measured periods
-            var dutyResults = [] //Will store measured duty cycles
-            var index = 1;  //Keeps track of what test case we are on
-            var finalResult = ''; //What will be saved to text file on server side
-            var lastName = 'last'; //Used to store last name of student
-            var firstName = 'first'; //Used to store first name of student
-            disableButtons(true);
-            try{
-                //device = await navigator.usb.requestDevice({filters: [{vendorId:0x1F00}]});
-                await connectDev(device);
-                for(var i=0; i<NUM_CASES; i+=1){
-                    var elementID = 'plotly-test' + index.toString(); //Get which test case this is
-                    //Send period followed by duty cycle to test board
-                    await sendData(device,'4'); //Tell device this is assignment 4
-                    await sendData(device, perList[i]); //Send test case i's period
-                    await sendData(device, dutyList[i]); //Send test case i's duty cycle
-
-                    //Store time stamp of period then duty cycle to results
-                    perResults[i] = await receiveData(device); //Get measured period from device
-                    console.log('Received ' + perResults[i]); 
-                    dutyResults[i] = await receiveData(device); //Get measured duty cycle from device
-                    console.log("Made it here on case " + index);
-                    console.log(perResults[i]);
-                    //Check if ther was a timeout error
-                    if(perResults[i].charAt(0) == 'T'){
-                        $('#' + elementID).after('<div>There was a TIMEOUT ERROR while processing ' +
-                            'test case ' + index + '.</div>');
-                    }
-                    else{
-                        //Convert results into floats
-                        var per = (parseFloat(perResults[i]) * 1000).toFixed(SIG_FIGS);; //Convert from seconds to ms
-                        var dCycle = (parseFloat(dutyResults[i]) * 100).toFixed(SIG_FIGS); //Convert from decimal to percentage
-                        var expectedPer = (parseInt(perList[i], 2) + 1)*10;  //Get expected period for this test case
-                        var expectedDuty = parseInt(dutyList[i],2); //Get expected duty cycle for this test case
-                        var periodRemainder = getTimeUnits(expectedPer,per,TIME_UNIT).toFixed(SIG_FIGS);
-                        var grade = gradeData(periodRemainder, expectedDuty, dCycle)
-                        //finalResult is what will be saved on server side for teach access
-                        finalResult += 'Test Case: ' + index + '\n' +
-                            'Period received: ' + per + 'ms\n' +
-                            'Duty Cycle received: ' + dCycle + '%\n' +
-                            'Number of time units off: ' + periodRemainder + '\n' +
-                            'Grade: ' + grade + '%\n' + '\n' + '\n' ;
-                        //Append results to browser
-                        $('#' + elementID).after('<div>Test Case: ' + index + '</div>' +
-                            '<div>Period received: ' + per + 'ms</div>' +
-                            '<div>Duty Cycle received: ' + dCycle + '%</div>' +
-                            '<div>Number of time units off: ' + periodRemainder + '</div>' +
-                            '<div>Grade: ' + grade + '%</div><br>'); 
-                        graphPlotly(per, dCycle/100, elementID, index); //Graph the wave
-                    }
-                    index++;
-                }
-                //Run recordGrades.php to save grades
-                $.ajax({
-                    type: 'POST', //POST to send data to php file
-                    url: 'serverFiles/recordGrades.php', //what file to run
-                    data: { fGrade: finalResult, l_name:lastName, f_name:firstName}, //what data to send
-                    success: function(response) {     //Run this function if successful
-                        console.log('Saved Results');
-                    }
-                });
-                await closeDev(device);
-            }
-            catch(err){
-                console.log(err);
-            }
-
-            index = 1; //Reset index for next time
-            disableButtons(false);
+        }
         })
     }
 
@@ -377,8 +302,6 @@ $(document).ready(function(){
                 expOnList[i] = tempPeriod * tempDutyCycle;
                 expOffList[i] = tempPeriod - expOnList[i];
             }
-            var onList = []; //Stores measured on time for each rise
-            var offList = []; //Stores measured off time for each fall
             var totalTime = 0; //The total time elapsed
             var exptotalTime = 0; //The total time expected to have elapsed
 
@@ -386,6 +309,8 @@ $(document).ready(function(){
             var finalResult = ''; //What will be saved to text file on server side
             var lastName = 'last'; //Used to store last name of student
             var firstName = 'first'; //Used to store first name of student
+            var onList = []; //Stores measured on time for each rise
+            var offList = []; //Stores measured off time for each fall
             disableButtons(true);
             try{
                 await connectDev(device);
@@ -439,8 +364,8 @@ $(document).ready(function(){
                     //Reset total times for next test case
                     totalTime = 0;
                     exptotalTime = 0;
-                    console.log('ONTIMES: ' + onList[i]);
-                    console.log('OFFTIMES: ' + offList[i]);
+                    console.log('ONTIMES: for test case ' + index + ': ' + onList[i]);
+                    console.log('OFFTIMES: for test case ' + index + ': ' + offList[i]);
 
                     //Receive calculated period and duty cycle from device last
                     var period = await receiveData(device);
@@ -475,6 +400,15 @@ $(document).ready(function(){
                     }
                     index++;
                 }
+                /* //Run recordGrades.php to save grades
+                $.ajax({
+                    type: 'POST', //POST to send data to php file
+                    url: 'serverFiles/recordGrades.php', //what file to run
+                    data: { fGrade: finalResult, l_name:lastName, f_name:firstName}, //what data to send
+                    success: function(response) {     //Run this function if successful
+                        console.log('Saved Results');
+                    }
+                });*/
                 await closeDev(device);
             }
             catch(err){
@@ -487,12 +421,55 @@ $(document).ready(function(){
     }
 
     //-------------------------------------------------------------------
+    /*This functio is used to validate period and duty cycle*/
+    function validate(period,dutyCycle){
+        if(period < MIN_PERIOD || period > MAX_PERIOD || (period % 10 != 0)){
+                alert('Error: Period is outside range, please enter a period between ' + MIN_PERIOD +
+                    ' and ' + MAX_PERIOD + ' that is divisible by 10.');
+                return false;
+            }else if(dutyCycle < MIN_DUTY_CYCLE || dutyCycle > MAX_DUTY_CYCLE){
+                alert('Error: Duty Cycle is outside range, please enter a duty cycle between ' + MIN_DUTY_CYCLE +
+                    ' and ' + MAX_DUTY_CYCLE);
+                return false;
+            } else{
+                return true;
+            }
+    }
+
+    //-------------------------------------------------------------------
+    /*This function is used to convert period from a decimal number to binary string*/
+    function perDecimaltoBinary(period){
+        var bPeriod = parseInt((period/10)-1, 10).toString(2);
+        if(bPeriod.length != 5){
+            var fillIn = '';
+            for(var i = (5 - bPeriod.length); i != 0; i--){
+                fillIn += '0';
+            }
+            bPeriod = fillIn + bPeriod;
+        }
+        return bPeriod;
+    }
+
+    //-------------------------------------------------------------------
+    /*This funciton is used to convert duty cycle from decimal number to binary string*/
+    function dCycleDecimaltoBinary(dutyCycle){
+        var bDutyCycle = parseInt(dutyCycle, 10).toString(2);
+                if(bDutyCycle.length != 7){
+                    var fillIn = '';
+                    for(var i = (7 - bDutyCycle.length); i != 0; i--){
+                        fillIn += '0';
+                    }
+                    bDutyCycle = fillIn + bDutyCycle;
+                }
+                return bDutyCycle;
+    }
+    //-------------------------------------------------------------------
     /*This function will create a plotly graph.
     *@param {float} period - The period measured from the board
     *@param {float} dutyCycle - The duty cycle measured from the board
     *@param {string} id - The ID tag of the <div> element that will hold the graph
     *@param {int} index - The number of the test case, eg. Test case 1, Test case 2, etc
-    */
+    
     function graphPlotly(period, dutyCycle, id, index){
         let test = document.getElementById(id);
         var xAxis = [];
