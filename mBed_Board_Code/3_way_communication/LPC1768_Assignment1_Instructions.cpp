@@ -55,16 +55,16 @@ DigitalOut dutyList[] = {MSD, DC2, DC3, DC4, DC5, DC6, LSD}; //List of duty cycl
 Serial pc(USBTX, USBRX);
 
 //Helper Function Prototypes; Definitions below main
-void assignmentOne(bool liveGraph);
 int readCommand(void);
-void sendAllData(float onList[], float offList[], int numCycles);
+void assignmentOne(void);
+void sendAllData(float list[], int numElements, float & avgPeriod, float &avgDutyCycle);
 void sendError(void);
 void sendBinary(uint8_t buffer[], DigitalOut list[], int size);
 void timeLiveGraph(float &period, float &duty); //Sends live timestamps of rises/falls
-void timeAvg(float &period, float &duty); //Sends only average period/duty cycle
 void convertFloatToBuf(float num, uint8_t buf[], int sigFigs);
 void writeToBrowser(uint8_t buffer[]);
 void readDataFromBrowser(uint8_t * buffer, uint32_t & len);
+void sendStop(void);
 //static_cast<int>(n >= 0 ? n + 0.1 : n - 0.1)  WILL CAST PERIOD TO INT IF WANTED
 
 //USB object
@@ -76,26 +76,19 @@ int main()
     {
         int choice = readCommand();
         if(choice == 0)
-        {
-            //pc.printf("Assignment one\r\n");
-            assignmentOne(true);
-        }
+            assignmentOne();
         else if(choice == 1)
             led1 = !led1;
         else if(choice == 2)
             led2 = !led2;
         else if(choice == 3)
             led3 = !led3;
-        else if(choice == 4)
-            assignmentOne(false);
         else
-        {
             pc.printf("Command failed. Choice is %d \r\n", choice);
-        }
     }
 }
 //-----------------------------------------------------------
-void assignmentOne(bool liveGraph)
+void assignmentOne()
 {
     float period = 0;
     float duty = 0;
@@ -112,10 +105,7 @@ void assignmentOne(bool liveGraph)
     perBuf1 = 0; //Dereference pointers
     dutyBuf1 = 0; 
     req = 1; //Send signal for other board to generate waves
-    if(liveGraph)
-        timeLiveGraph(period, duty); //Period and duty cycle will be returned by reference
-    else
-        timeAvg(period,duty);
+    timeLiveGraph(period, duty); //Period and duty cycle will be returned by reference
     req = 0; //Set signal to 0 so that it can rise again
     if(period<=0)//Period is returned as -1 if a timeout error occurs
     {
@@ -154,116 +144,47 @@ void timeLiveGraph(float &period, float &duty) //Function that times board
 {
     Timer totTime;
     Timer timeOut;
-    int numCycles = 0;
+    int signal = 0;
+    //int temp;
+    int numElements = 0;
     timeOut.start(); //Start time out so that it can count while waiting for a fresh cycle
     pc.printf("Starting timing\r\n");
     while (!PWM_API.read() && timeOut.read() < 5.0){}
     while (PWM_API.read() && timeOut.read() < 5.0){} //These loops ensure that timing begins on a fresh cycle
     if(timeOut.read() <= 4.9)
     {
-        Timer onTime; //Records time of rise
-        Timer offTime; //Records time of fall
-        float onDifference = 0; //Used to keep track of total onTime value from previous cycle
-        float offDifference = 0; //Same as above, for offTime
-        float *onList, *offList; 
-        onList = new float [MAX_BUF_SIZE];
-        offList = new float [MAX_BUF_SIZE];
+        float *timeList; 
+        timeList = new float [MAX_BUF_SIZE];
         while (!PWM_API.read() && timeOut.read() < 10.0){}
         while (PWM_API.read() && timeOut.read() < 10.0){}
         totTime.start();
-        offTime.start();
         while(totTime.read() < RECORDING_TIME)
         {
-            while(!PWM_API.read() && timeOut.read() < 12.0){}
-            offTime.stop();
-            onTime.start();
-            offList[numCycles] = offTime.read() - offDifference;
-            //Record difference from total offTime to current offTime
-            offDifference = offTime.read();
-            
-            while(PWM_API.read() && timeOut.read() < 12.0){}
-            offTime.start();
-            onTime.stop();
-            onList[numCycles] = onTime.read() - onDifference;
-            onDifference = onTime.read();           
-            ++numCycles;
+            //temp = PWM_API.read();
+            if(signal != PWM_API.read())//temp)
+            {
+                timeList[numElements] = totTime.read();
+                signal = PWM_API;//temp
+                ++numElements;
+            }
         }
         totTime.stop();
-        if(timeOut.read() >= 11.9)
-        {
-            //pc.printf("Error. Timeout occurred21.\n\r");
+        timeOut.stop();
+        //Checking that it didn't get stuck too long on the while loop 
+        if(timeOut.read() >= 14.0)
             period = -1.0;
-        }
         else
-        {
-        period = totTime.read() / numCycles;
-        duty = onTime.read() / totTime.read();
-        }
-        sendAllData(onList,offList,numCycles);
-        delete [] onList;
-        delete [] offList;
-        onList = 0;
-        offList = 0;
-        uint8_t * stop;
-        stop = new uint8_t[SIG_FIGS];
-        string stopString = "STOP";
-        for(int i=0;i<stopString.length();++i)
-            stop[i] = static_cast<uint8_t>(stopString[i]);
-        writeToBrowser(stop);
-        delete [] stop;
-        stop = 0;
-    }
-    else
-    {
-        pc.printf("Error. Timeout occurred.\n\r");
-        period = -1.0;
-    }
-}
+            sendAllData(timeList,numElements, period, duty);
 
-//-----------------------------------------------------------
-void timeAvg(float &period, float &duty) //Function that times board
-{
-    Timer onTime;
-    Timer totTime;
-    Timer timeOut;
-    int numCycles = 0;
-    timeOut.start(); //Start time out so that it can count while waiting for a fresh cycle
-    pc.printf("Starting timing\r\n");
-    while (!PWM_API.read() && timeOut.read() < 5.0){}
-    while (PWM_API.read() && timeOut.read() < 5.0){} //These loops ensure that timing begins on a fresh cycle
-    timeOut.stop();
-    pc.printf("Got here. Timeout is %f\r\n",timeOut.read());
-    if(timeOut.read() <= 4.9)
-    {
-        while (!PWM_API.read() && timeOut.read() < 10.0){}
-        while (PWM_API.read() && timeOut.read() < 10.0){}
-        totTime.start();
-        while(totTime.read() < RECORDING_TIME)
-        {
-            while(!PWM_API.read() && timeOut.read() < 12.0){}
-            onTime.start();
-            while(PWM_API.read() && timeOut.read() < 12.0){}
-            onTime.stop();
-            numCycles += 1;
-        }
-        totTime.stop();
-        if(timeOut.read() >= 11.9)
-        {
-            period = -1;  
-            duty = -1;  
-        }
-        else
-        {
-            period = totTime.read() / numCycles;
-            duty = onTime.read() / totTime.read(); 
-        }
-        
+        delete [] timeList;
+        timeList = 0;
     }
     else
     {
         pc.printf("Error. Timeout occurred.\n\r");
         period = -1.0;
     }
+    sendStop();//Send the stop string to tell the browser to stop reading
 }
 //-----------------------------------------------------------
 void convertFloatToBuf(float num, uint8_t buf[], int sigFigs) //Converts a float to a uint8_t buffer to send
@@ -340,15 +261,23 @@ void sendError(void)
     errBuf2 = 0;
 }
 //-----------------------------------------------------------
-void sendAllData(float onList[], float offList[], int numCycles)
+void sendAllData(float list[], int numElements, float & avgPeriod, float &avgDutyCycle)
 {
     uint8_t *onBuffer, *offBuffer;
-    for(int i=0;i<numCycles;++i)
+    float currentTime = 0; //Needs to be subtracted to find the onTime/offTime
+    float totOnTime = 0;
+    float totOffTime = 0;
+    int i;
+    for(i=0;i<numElements - 1;i+=2) //i+=2 because we are accessing two indices per iteration
     {
             offBuffer = new uint8_t[SIG_FIGS];
             onBuffer = new uint8_t[SIG_FIGS];
-            convertFloatToBuf(offList[i], offBuffer, SIG_FIGS);
-            convertFloatToBuf(onList[i], onBuffer, SIG_FIGS);
+            convertFloatToBuf(list[i] - currentTime, offBuffer, SIG_FIGS);
+            totOffTime += (list[i] - currentTime);
+            currentTime = list[i];
+            convertFloatToBuf(list[i+1] - currentTime, onBuffer, SIG_FIGS);
+            totOnTime += (list[i+1] - currentTime);
+            currentTime = list[i+1];
             writeToBrowser(offBuffer);
             writeToBrowser(onBuffer);
             delete [] offBuffer;
@@ -356,4 +285,18 @@ void sendAllData(float onList[], float offList[], int numCycles)
             offBuffer = 0;
             onBuffer = 0;
     }
+    avgPeriod = ((totOnTime + totOffTime)/(numElements)) * 1000 * 2; //1000 for converting to ms; *2 for total cycles
+    avgDutyCycle = totOnTime / (totOnTime + totOffTime);
+}
+//-----------------------------------------------------------
+void sendStop(void)
+{
+    uint8_t * stop;
+    stop = new uint8_t[SIG_FIGS];
+    string stopString = "STOP";
+    for(int i=0;i<stopString.length();++i)
+        stop[i] = static_cast<uint8_t>(stopString[i]);
+    writeToBrowser(stop);
+    delete [] stop;
+    stop = 0;
 }

@@ -240,9 +240,9 @@ $(document).ready(function(){
                 await sendData(device,bDutyCycle);
                 //Receive period and duty cycle measured from test board
                 while(true){
-                    var dummy = await receiveData(device);
-                    console.log(dummy);
-                    if(dummy.charAt(0) == 'S'){ //check that the device is still sending data
+                    var timeStamp = await receiveData(device);
+                    console.log(timeStamp);
+                    if(timeStamp.charAt(0) == 'S'){ //check that the device is still sending data
                             break; //Break from the loop if there is no more data
                         }
                 }
