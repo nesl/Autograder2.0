@@ -228,7 +228,9 @@ $(document).ready(function(){
             //Get values period and duty cycle entered by user
             var period = $('#per').val();
             var dutyCycle = $('#dutyCycle').val();
-            if (validate(period,dutyCycle)){
+            var elementID = document.getElementById('user-graph');
+            var index = 'User';
+            if(validate(period,dutyCycle)){
             try{
                 var bPeriod = perDecimaltoBinary(period);
                 var bDutyCycle = dCycleDecimaltoBinary(dutyCycle);
@@ -238,6 +240,9 @@ $(document).ready(function(){
                 await sendData(device,'0');
                 await sendData(device,bPeriod); //Currently, sendData also receives data to test it
                 await sendData(device,bDutyCycle);
+                //Initialize the measured and expected graph
+                initGraph(elementID,index, 'Your Results');
+                initGraph(elementID,index, 'Expected Results');
                 //Receive period and duty cycle measured from test board
                 while(true){
                     var timeStamp = await receiveData(device);
@@ -245,6 +250,7 @@ $(document).ready(function(){
                     if(timeStamp.charAt(0) == 'S'){ //check that the device is still sending data
                             break; //Break from the loop if there is no more data
                         }
+
                 }
                 var perResult = await receiveData(device);
                 var dutyResult = await receiveData(device);
@@ -336,7 +342,7 @@ $(document).ready(function(){
                             break; //Break from the loop if there is no more data
                         }
                         var ftimeOff = timeOff*1; //Convert timeOff to float
-                        offList.push(ftimeOff); //Store measured offTime to offList
+                        offList.push(ftimeOff*1000); //Store measured offTime to offList
                         totalTime+= (ftimeOff*1000); //Updated totalTime (s to ms)
                         exptotalTime += (expOffList[i]); //Update expected time (ms)
                         appendGraph(totalTime, exptotalTime, 0,1,elementID); //Append both graphs with new data
@@ -347,7 +353,7 @@ $(document).ready(function(){
                             break; //Break from the loop if there is no more data
                         }
                         var ftimeOn = timeOn*1; //Convert timeOn to float
-                        onList.push(ftimeOn); //Store measured onTime to onList
+                        onList.push(ftimeOn*1000); //Store measured onTime to onList
                         totalTime+= (ftimeOn*1000); //Updated totalTime (s to ms)
                         exptotalTime += (expOnList[i]); //Update expected time (ms)
                         appendGraph(totalTime, exptotalTime, 1,0,elementID); //Append both graphs with new data
@@ -362,10 +368,11 @@ $(document).ready(function(){
                         count = totalTime;
                     }
                     //Reset total times for next test case
+                    calculateTotalError(onList,offList,expOnList[i]/1000,expOffList[i]/1000, index);
                     totalTime = 0;
                     exptotalTime = 0;
-                    console.log('ONTIMES: for test case ' + index + ': ' + onList[i]);
-                    console.log('OFFTIMES: for test case ' + index + ': ' + offList[i]);
+                    console.log('ONTIMES: for test case ' + index + ': ' + onList);
+                    console.log('OFFTIMES: for test case ' + index + ': ' + offList);
 
                     //Receive calculated period and duty cycle from device last
                     var period = await receiveData(device);
@@ -569,5 +576,26 @@ $(document).ready(function(){
     {
         return Math.abs((expectedPer - receivedPer)/minTimeUnit);
     }
+    function calculateTotalError(onList,offList,expectedOn,expectedOff, caseNum)
+    {
+        var onSum = 0;
+        var offSum = 0;
+        console.log(onList[0]);
+        console.log(offList[0]);
+        console.log(expectedOn);
+        console.log(expectedOff);
+        for(var i=0;i<onList.length;++i)
+        {
+            onSum += Math.abs((onList[i] - expectedOn));
+        }
+        for(var i=0;i<offList.length;++i)
+        {
+            offSum += Math.abs((offList[i] - expectedOff));
+        }
+        console.log('TOTAL ERROR FOR ON TIMES FOR TEST CASE ' + caseNum + ': ' + onSum);
+        console.log('TOTAL ERROR FOR OFF TIMES FOR TEST CASE ' + caseNum + ': ' + offSum);
+    }
+
 //Entire program needs to be in bracket below
+
 })
