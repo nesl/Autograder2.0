@@ -263,30 +263,28 @@ void sendError(void)
 //-----------------------------------------------------------
 void sendAllData(float list[], int numElements, float & avgPeriod, float &avgDutyCycle)
 {
-    uint8_t *onBuffer, *offBuffer;
+    uint8_t *dataBuffer;
     float currentTime = 0; //Needs to be subtracted to find the onTime/offTime
-    float totOnTime = 0;
-    float totOffTime = 0;
-    int i;
-    for(i=0;i<numElements - 1;i+=2) //i+=2 because we are accessing two indices per iteration
+    float totOnTime = 0; //Only measures the rises
+    float totTime = 0; //Measures the entire time
+    if(numElements % 2 != 0)
+        --numElements; //Discarding extra timestamp
+    //Every other iteration will be off or on timestamp. Off time is first
+    for(int i=0;i<numElements;i++)
     {
-            offBuffer = new uint8_t[SIG_FIGS];
-            onBuffer = new uint8_t[SIG_FIGS];
-            convertFloatToBuf(list[i] - currentTime, offBuffer, SIG_FIGS);
-            totOffTime += (list[i] - currentTime);
+            dataBuffer = new uint8_t[SIG_FIGS];
+            convertFloatToBuf(list[i] - currentTime, dataBuffer, SIG_FIGS);
+            //totTime += (list[i] - currentTime);
+            if(i % 2 != 0) //Odd indices represent on times
+                totOnTime += list[i] - currentTime; 
             currentTime = list[i];
-            convertFloatToBuf(list[i+1] - currentTime, onBuffer, SIG_FIGS);
-            totOnTime += (list[i+1] - currentTime);
-            currentTime = list[i+1];
-            writeToBrowser(offBuffer);
-            writeToBrowser(onBuffer);
-            delete [] offBuffer;
-            delete [] onBuffer;
-            offBuffer = 0;
-            onBuffer = 0;
+            writeToBrowser(dataBuffer);
+            delete [] dataBuffer;
+            dataBuffer = 0;
     }
-    avgPeriod = ((totOnTime + totOffTime)/(numElements)) * 1000 * 2; //1000 for converting to ms; *2 for total cycles
-    avgDutyCycle = totOnTime / (totOnTime + totOffTime);
+    totTime = list[numElements - 1];
+    avgPeriod = totTime/(numElements*2); //*2 because there are 2 elements per cycle
+    avgDutyCycle = totOnTime / totTime;
 }
 //-----------------------------------------------------------
 void sendStop(void)
