@@ -125,9 +125,15 @@ $(document).ready(function(){
     var MAX_PERIOD = 320; //Maximum period (ms)
     var MIN_DUTY_CYCLE = 2; //Minimum Duty Cycle (percentage)
     var MAX_DUTY_CYCLE = 98; //Maximum Duty Cycle (percentage)
+    var expTrace = 1;
+    var measuredTrace = 0;
+    var runExpTrace = 1;
+    var runMeasuredTrace = 0;
     let device;
+    //Start with all buttons disabled until device is selected
     disableButtons(true);
     $(select).attr('disabled',false);
+
     //-------------------------------------------------------------------
     /*Defining what happens when the blinky1 button is clicked. This is meant to
     simulate picking an assignment. It will tell the device what assignment is to
@@ -226,46 +232,52 @@ $(document).ready(function(){
     if(send){
         $(send).click(async() => {
             //Get values period and duty cycle entered by user
-            var period = $('#per').val();
-            var dutyCycle = $('#dutyCycle').val();
-            var elementID = document.getElementById('user-graph');
-            var index = 'User';
+            var period = $('#per').val()*1;
+            var dutyCycle = $('#dutyCycle').val()*1;
+            var elementID = document.getElementById('user-graph'); //DOM element where the graph will be inserted
+            var gTitle = 'Manual Input'; //Graph Title
+            var offList = []; //Used to store off times of each fall
+            var onList = []; //Used to store on times of each rie
+            var expOnTime = period * (dutyCycle/100); //Determine expected on time for each rise
+            var expOffTime = period - expOnTime; //Determine expected off time for each fall
             if(validate(period,dutyCycle)){
             try{
+                //Convert from decimal to binary
                 var bPeriod = perDecimaltoBinary(period);
                 var bDutyCycle = dCycleDecimaltoBinary(dutyCycle);
                 disableButtons(true);
                 await connectDev(device);
                 //Send period and duty cycle to device
                 await sendData(device,'0');
-                await sendData(device,bPeriod); //Currently, sendData also receives data to test it
+                await sendData(device,bPeriod); 
                 await sendData(device,bDutyCycle);
                 //Initialize the measured and expected graph
-                initGraph(elementID,index, 'Your Results');
-                initGraph(elementID,index, 'Expected Results');
-                //Receive period and duty cycle measured from test board
-                while(true){
-                    var timeStamp = await receiveData(device);
-                    console.log(timeStamp);
-                    if(timeStamp.charAt(0) == 'S'){ //check that the device is still sending data
-                            break; //Break from the loop if there is no more data
-                        }
+                initGraph(elementID,gTitle, 'Your Results');
+                initGraph(elementID,gTitle, 'Expected Results');
+                //Plot PWM wave in graph
+                await plotOscilloscope(device,offList,onList,expOffTime,expOnTime,elementID,measuredTrace, expTrace);
 
-                }
+                measuredTrace += 2;
+                expTrace += 2;
+                //Receive period and duty cycle
                 var perResult = await receiveData(device);
                 var dutyResult = await receiveData(device);
-                console.log(perResult);
-                console.log(dutyResult);
                 var elementID = 'user-graph';
+                //Check for time out error
                 if(perResult.charAt(0) == 'T'){
                         $('#' + elementID).after('<div>There was a TIMEOUT ERROR while processing ' +
                             'test case ' + index + '. Please reset the tester board.</div>');
                 }
+                //Otherwise display results
                 else{
                     var per = (parseFloat(perResult) * 1000).toFixed(SIG_FIGS);; //Convert from seconds to ms
                     var dCycle = (parseFloat(dutyResult) * 100).toFixed(SIG_FIGS);
-                    $('#' + elementID).after(       '<div>Period received: ' + per + 'ms</div>' +
-                            '<div>Duty Cycle received: ' + dCycle + '%</div>');
+                    var periodRemainder = getTimeUnits(period,perResult,TIME_UNIT).toFixed(SIG_FIGS);
+                    $('#' + elementID).after('<div>Manual Test Case'  + '</div>' +
+                            '<div>Period received: ' + per + 'ms</div>' +
+                            '<div>Duty Cycle received: ' + dCycle + '%</div>' +
+                            '<div>Number of time units off: ' + periodRemainder + '</div>' +
+                            '<br>'); 
                 }
 
                 await closeDev(device);
@@ -315,18 +327,17 @@ $(document).ready(function(){
             var finalResult = ''; //What will be saved to text file on server side
             var lastName = 'last'; //Used to store last name of student
             var firstName = 'first'; //Used to store first name of student
-            var onList = []; //Stores measured on time for each rise
-            var offList = []; //Stores measured off time for each fall
             disableButtons(true);
             try{
                 await connectDev(device);
                 for(var i=0; i<NUM_CASES; i+=1){
-                    var count = 0; //Used to keep track of what the x-axis space of the graph
                     var elementID = 'plotly-test' + index.toString(); //Get which test case this is
+                    var onList = []; //Stores measured on time for each rise
+                    var offList = []; //Stores measured off time for each fall
 
                     //Initialize the measured and expected graph
-                    initGraph(elementID,index, 'Your Results');
-                    initGraph(elementID,index, 'Expected Results');
+                    initGraph(elementID, 'Test Case: ' + index, 'Your Results');
+                    initGraph(elementID, 'Test Case: ' + index, 'Expected Results');
 
 
                     //Send period followed by duty cycle to test board
@@ -335,42 +346,10 @@ $(document).ready(function(){
                     await sendData(device, dutyList[i]);
 
                     //Loop until the testboard is finished sending data
-                    while(true){
-                        //Receive timeOff first
-                        var timeOff = await receiveData(device);
-                        if(timeOff.charAt(0) == 'S'){ //check that the device is still sending data
-                            break; //Break from the loop if there is no more data
-                        }
-                        var ftimeOff = timeOff*1; //Convert timeOff to float
-                        offList.push(ftimeOff*1000); //Store measured offTime to offList
-                        totalTime+= (ftimeOff*1000); //Updated totalTime (s to ms)
-                        exptotalTime += (expOffList[i]); //Update expected time (ms)
-                        appendGraph(totalTime, exptotalTime, 0,1,elementID); //Append both graphs with new data
+                    await plotOscilloscope(device,offList,onList,expOffList[i],expOnList[i],elementID, runMeasuredTrace, runExpTrace);
 
-                        //Receive timeOn next
-                        var timeOn = await receiveData(device);
-                        if(timeOn.charAt(0) == 'S'){ //check that the device is still sending data
-                            break; //Break from the loop if there is no more data
-                        }
-                        var ftimeOn = timeOn*1; //Convert timeOn to float
-                        onList.push(ftimeOn*1000); //Store measured onTime to onList
-                        totalTime+= (ftimeOn*1000); //Updated totalTime (s to ms)
-                        exptotalTime += (expOnList[i]); //Update expected time (ms)
-                        appendGraph(totalTime, exptotalTime, 1,0,elementID); //Append both graphs with new data
-
-                        //Check that the x-axis does not exceed 500 units, if so adjust the graph
-                        if(count > 500){
-                            var newLayout = {
-                                'xaxis.range': [count - 500, count]
-                            }
-                            Plotly.relayout(elementID,newLayout);
-                        }
-                        count = totalTime;
-                    }
                     //Reset total times for next test case
-                    calculateTotalError(onList,offList,expOnList[i]/1000,expOffList[i]/1000, index);
-                    totalTime = 0;
-                    exptotalTime = 0;
+                    calculateTotalError(onList,offList,expOnList[i],expOffList[i], index);
                     console.log('ONTIMES: for test case ' + index + ': ' + onList);
                     console.log('OFFTIMES: for test case ' + index + ': ' + offList);
 
@@ -416,6 +395,9 @@ $(document).ready(function(){
                         console.log('Saved Results');
                     }
                 });*/
+
+                runExpTrace += 2;
+                runMeasuredTrace +=2;
                 await closeDev(device);
             }
             catch(err){
@@ -425,6 +407,52 @@ $(document).ready(function(){
             index = 1; //Reset index for next time
             disableButtons(false);
         })
+    }
+
+    //-------------------------------------------------------------------
+    /*This function is used to receive time stamps of PWM waves and plot them on a graph.
+    *@param {device} device - The device that is sending data
+    *@param {array} offList - An array used to stored all off times of falls
+    *@param {array} onList - An array used to stored all on times of rises
+    *@param {float} expOffTime - Expected off time of all falls
+    *@param {float} expOnTime - Expected on time of all rises
+    */
+    async function plotOscilloscope(device,offList, onList, expOffTime, expOnTime, elementID, eTrace, mTrace){
+        var totalTime = 0;
+        var exptotalTime = 0;
+        var count = 0;
+        while(true){
+            //Receive timeOff first
+            var timeOff = await receiveData(device);
+            if(timeOff.charAt(0) == 'S'){ //check that the device is still sending data
+                break; //Break from the loop if there is no more data
+            }
+            var ftimeOff = timeOff*1; //Convert timeOff to float
+            offList.push(ftimeOff*1000); //Store measured offTime to offList
+            totalTime+= (ftimeOff*1000); //Updated totalTime (s to ms)
+            exptotalTime += (expOffTime); //Update expected time (ms)
+            appendGraph(totalTime, exptotalTime, 0,1,elementID,mTrace,eTrace); //Append both graphs with new data
+
+            //Receive timeOn next
+            var timeOn = await receiveData(device);
+            if(timeOn.charAt(0) == 'S'){ //check that the device is still sending data
+                break; //Break from the loop if there is no more data
+            }
+            var ftimeOn = timeOn*1; //Convert timeOn to float
+            onList.push(ftimeOn*1000); //Store measured onTime to onList
+            totalTime+= (ftimeOn*1000); //Updated totalTime (s to ms)
+            exptotalTime += (expOnTime); //Update expected time (ms)
+            appendGraph(totalTime, exptotalTime, 1,0,elementID, mTrace, eTrace); //Append both graphs with new data
+
+            //Check that the x-axis does not exceed 500 units, if so adjust the graph
+            if(count > 500){
+                var newLayout = {
+                    'xaxis.range': [count - 500, count]
+                }
+                Plotly.relayout(elementID,newLayout);
+            }
+            count = totalTime;
+        }
     }
 
     //-------------------------------------------------------------------
@@ -470,56 +498,17 @@ $(document).ready(function(){
                 }
                 return bDutyCycle;
     }
-    //-------------------------------------------------------------------
-    /*This function will create a plotly graph.
-    *@param {float} period - The period measured from the board
-    *@param {float} dutyCycle - The duty cycle measured from the board
-    *@param {string} id - The ID tag of the <div> element that will hold the graph
-    *@param {int} index - The number of the test case, eg. Test case 1, Test case 2, etc
-    
-    function graphPlotly(period, dutyCycle, id, index){
-        let test = document.getElementById(id);
-        var xAxis = [];
-        var yAxis = [];
-        //Creating the x values of the points
-        for(var i=0; i<NUM_CYCLES;++i){
-            xAxis.push(period*(i));
-            xAxis.push(period*(i) + period*dutyCycle);
-            xAxis.push(period*(i) + period*dutyCycle);
-            xAxis.push(period*(i+1));
-        }
-        //Creating the y values of the points
-        for(var i=0;i<NUM_CYCLES;++i)
-        {
-            yAxis.push(1);
-            yAxis.push(1);
-            yAxis.push(0);
-            yAxis.push(0);
-        }
-        var layout = {
-            title: 'Test Case ' + index.toString(),
-            xaxis:{
-                title: 'Time (ms)'
-            }            
-        };
-        Plotly.plot(test, [{
-            x: xAxis,
-            y: yAxis 
-            }],layout
-            //{margin: {t:0}}    
-        );
-    }
 
     //-------------------------------------------------------------------
     /*This function initializes a graph with a single point at (0,0)
     *@param {DOMelement} elementID - The HTML element where the graph will be created
-    *@param {int} index - The current test case number
-    *@param {string} traceName - The name which will be given to the trace
+    *@param {string} gTitle - The title of the graph
+    *@parm {string} traceName - Name of the trace
     */
-    function initGraph(elementID,index, traceName)
+    function initGraph(elementID, gTitle, traceName)
     {
         //Plotly.plot(element, data, layout)
-        Plotly.plot(elementID, [{y: [0],x: [0], name: traceName}], {title: 'Test Case ' + index.toString(),
+        Plotly.plot(elementID, [{y: [0],x: [0], name: traceName}], {title: gTitle,
             xaxis:{title: 'Time (ms)'}});
     }
 
@@ -532,13 +521,15 @@ $(document).ready(function(){
     *@param {int} y1 - 0 for fall, 1 for rise
     *@param {int} y2 - 1 for fall, 0 for rise
     *@param {DOMelement} elementID - The HTML element where the graph to be appended is
+    *@param {int} expTrace - Trace where expected PWM is stored is stored
+    *@param {int} measuredTrace - Trace where measured PWM wave is stored
     */
-    function appendGraph(x1,x2,y1,y2,elementID)
+    function appendGraph(x1,x2,y1,y2,elementID, measuredTrace, expTrace)
     {
         //Plotly.extendTraces(element, updated_data, traces)
         //y:[[y-cooridinates to push to trace ], [y-coordinates to push to trace 1]]
         //[trace 0, trace 1]
-        Plotly.extendTraces(elementID, {y:[[y1,y2],[y1,y2]], x:[[x1,x1],[x2,x2]]}, [0,1])
+        Plotly.extendTraces(elementID, {y:[[y1,y2],[y1,y2]], x:[[x1,x1],[x2,x2]]}, [measuredTrace,expTrace])
     }
 
 
@@ -576,6 +567,14 @@ $(document).ready(function(){
     {
         return Math.abs((expectedPer - receivedPer)/minTimeUnit);
     }
+    
+    /*This function is to test how accurate the timing algorithm is. It is for debugging purposes only
+    *@param {Float []} onList - A list of timestamps representing the length of rises for that wave
+    *@param {Float []} offList - A list of timestamps representing the length of falls for that wave
+    *@param {Float} expectedOn - The theoretical length of the rise
+    *@param {Float} expectedOff - The theoretical length of the fall
+    *@param {Int} caseNum - The case number for cascaded grading, eg. case 1, case 2, etc.
+    */
     function calculateTotalError(onList,offList,expectedOn,expectedOff, caseNum)
     {
         var onSum = 0;
