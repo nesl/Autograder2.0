@@ -136,15 +136,7 @@ $(document).ready(function(){
     be graded.*/
     if(blinky1){
         $(blinky1).click(async()=>{
-            try{
-                disableButtons(true);
-                await connectDev(device);
-                await sendData(device, '1'); //Indicate this is blinky1 assignment with 1
-                await closeDev(device);
-            } catch(err){
-                console.log(err);
-            }
-            disableButtons(false);
+            blinkLight('1');
         })
     }
 
@@ -154,15 +146,7 @@ $(document).ready(function(){
     be graded.*/
     if(blinky2){
         $(blinky2).click(async()=>{
-            try{
-                disableButtons(true);
-                await connectDev(device);
-                await sendData(device, '2'); //Indicate this is blinky2 assignment with 2
-                await closeDev(device);
-            } catch(err){
-                console.log(err);
-            }
-            disableButtons(false);
+            blinkLight('2');
         })
     }
 
@@ -172,15 +156,7 @@ $(document).ready(function(){
     be graded.*/
     if(blinky3){
         $(blinky3).click(async()=>{
-            try{
-                disableButtons(true);
-                await connectDev(device);
-                await sendData(device, '3'); //Indicate this is blinky3 assignment with 3
-                await closeDev(device);
-            } catch(err){
-                console.log(err);
-            }
-            disableButtons(false);
+            blinkLight('3');
         })
     }
     //-------------------------------------------------------------------
@@ -230,7 +206,7 @@ $(document).ready(function(){
             //Get values period and duty cycle entered by user
             var period = $('#per').val()*1;
             var dutyCycle = $('#dutyCycle').val()*1;
-            var elementID = document.getElementById('user-graph'); //DOM element where the graph will be inserted
+            var graphLocation = 'user-graph';
             var gTitle = 'Manual Input'; //Graph Title
             var offList = []; //Used to store off times of each fall
             var onList = []; //Used to store on times of each rie
@@ -244,36 +220,7 @@ $(document).ready(function(){
                     disableButtons(true);
                     await connectDev(device);
                     //Send period and duty cycle to device
-                    await sendData(device,'0');
-                    await sendData(device,bPeriod); 
-                    await sendData(device,bDutyCycle);
-                    //Initialize the measured and expected graph
-                    initGraph(elementID,gTitle, 'Your Results');
-                    initGraph(elementID,gTitle, 'Expected Results');
-                    //Plot PWM wave in graph
-                    await plotOscilloscope(device,offList,onList,expOffTime,expOnTime,elementID,measuredTrace, expTrace);
-
-                    measuredTrace += 2;
-                    expTrace += 2;
-                    //Receive period and duty cycle
-                    var checkStatus = await receiveData(device);
-                    var elementID = 'user-graph';
-                    //Check for time out error
-                    if(checkStatus < 0){
-                            $('#' + elementID).after('<div>There was a TIMEOUT ERROR while processing ' +
-                                'test case ' + index + '</div>');
-                    }
-                    //Otherwise display results
-                    else{
-                        var per = (parseFloat(perResult) * 1000).toFixed(SIG_FIGS);; //Convert from seconds to ms
-                        var dCycle = (parseFloat(dutyResult) * 100).toFixed(SIG_FIGS);
-                        var periodRemainder = getTimeUnits(period,perResult,TIME_UNIT).toFixed(SIG_FIGS);
-                        $('#' + elementID).after('<div>Manual Test Case'  + '</div>' +
-                                '<div>Period received: ' + per + 'ms</div>' +
-                                '<div>Duty Cycle received: ' + dCycle + '%</div>' +
-                                '<div>Number of time units off: ' + periodRemainder + '</div>' +
-                                '<br>'); 
-                    }
+                    await sendTestCase(bPeriod, bDutyCycle, gTitle, expOnTime, expOffTime, graphLocation);
 
                     await closeDev(device);
                 } catch(err){
@@ -316,70 +263,14 @@ $(document).ready(function(){
                 expOffList[i] = tempPeriod - expOnList[i];
             }
             var totalTime = 0; //The total time elapsed
-            var exptotalTime = 0; //The total time expected to have elapsed
-
+            var exptotalTime = 0; //The theoretical time to have elapsed
             var index = 1;  //Keeps track of what test case we are on
-            var finalResult = ''; //What will be saved to text file on server side
-            var lastName = 'last'; //Used to store last name of student
-            var firstName = 'first'; //Used to store first name of student
             disableButtons(true);
             try{
                 await connectDev(device);
                 for(var i=0; i<NUM_CASES; i+=1){
-                    var elementID = 'plotly-test' + index.toString(); //Get which test case this is
-                    var onList = []; //Stores measured on time for each rise
-                    var offList = []; //Stores measured off time for each fall
-
-                    //Initialize the measured and expected graph
-                    initGraph(elementID, 'Test Case: ' + index, 'Your Results');
-                    initGraph(elementID, 'Test Case: ' + index, 'Expected Results');
-
-
-                    //Send period followed by duty cycle to test board
-                    await sendData(device,'0'); //Tell device this is assignment 0
-                    await sendData(device, perList[i]); 
-                    await sendData(device, dutyList[i]);
-
-                    //Loop until the testboard is finished sending data
-                    await plotOscilloscope(device,offList,onList,expOffList[i],expOnList[i],elementID, runMeasuredTrace, runExpTrace);
-
-                    //Reset total times for next test case
-                    calculateTotalError(onList,offList,expOnList[i],expOffList[i], index);
-                    console.log('ONTIMES: for test case ' + index + ': ' + onList);
-                    console.log('OFFTIMES: for test case ' + index + ': ' + offList);
-
-                    //Receive calculated period and duty cycle from device last
-                    
-                    var checkStatus = await receiveData(device);
-                    //Check for timeOut error
-                    if(checkStatus < 0){
-                        $('#' + elementID).after('<div>There was a TIMEOUT ERROR while processing ' +
-                            'test case ' + index + '.</div>');
-                    }
-                    else{
-                        //finalResult is what will be saved on server side for teach access
-                        const add = (a, b) =>
-                            (a + b)
-                        var sumOnTimes = onList.reduce(add); //Sums array
-                        var sumOffTimes = offList.reduce(add); 
-                        var period = (sumOnTimes + sumOffTimes)/onList.length;
-                        var dCycle = (sumOnTimes / (sumOnTimes + sumOffTimes));
-                        var expectedPer = (parseInt(perList[i], 2) + 1)*10;  //Get expected period for this test case
-                        var expectedDuty = parseInt(dutyList[i],2)/100; //Get expected duty cycle for this test case
-                        var periodRemainder = getTimeUnits(expectedPer,period,TIME_UNIT).toFixed(SIG_FIGS);
-                        var grade = gradeData(periodRemainder, expectedDuty, dCycle);
-                        finalResult += 'Test Case: ' + index + '\n' +
-                            'Period received: ' + period + 'ms\n' +
-                            'Duty Cycle received: ' + dCycle + '%\n' +
-                            'Number of time units off: ' + periodRemainder + '\n' +
-                            'Grade: ' + grade + '%\n' + '\n' + '\n' ;
-                        //Append results to browser
-                        $('#' + elementID).after('<div>Test Case: ' + index + '</div>' +
-                            '<div>Period received: ' + period + 'ms</div>' +
-                            '<div>Duty Cycle received: ' + dCycle + '%</div>' +
-                            '<div>Number of time units off: ' + periodRemainder + '</div>' +
-                            '<div>Grade: ' + grade + '%</div><br>'); 
-                    }
+                    var graphElement = 'plotly-test' + index.toString(); //Get which test case this is
+                    await sendTestCase(perList[i], dutyList[i], index, expOnList[i], expOffList[i], graphElement);
                     index++;
                 }
                 /* //Run recordGrades.php to save grades
@@ -413,7 +304,7 @@ $(document).ready(function(){
     *@param {float} expOffTime - Expected off time of all falls
     *@param {float} expOnTime - Expected on time of all rises
     */
-    async function plotOscilloscope(device,offList, onList, expOffTime, expOnTime, elementID, eTrace, mTrace){
+    async function plotOscilloscope(device,offList, onList, expOffTime, expOnTime, elementID, mTrace, eTrace){
         var totalTime = 0;
         var exptotalTime = 0;
         var count = 0;
@@ -529,7 +420,7 @@ $(document).ready(function(){
     *@param {Float} periodRemainder - The number of time units the students answer was off by
     *@param {Float} expectedDuty - The decimal value of the binary number passed to the board for duty cycle
     *@param {Float} receivedDuty - The measured duty cycle
-    *FUNCTIONALITY FOR GRADING DUTY CYCLE MUST BE ADDED BE ADDED LATER
+    *FUNCTIONALITY FOR GRADING DUTY CYCLE MUST BE ADDED BE ADDED
     */
 
     function gradeData(periodRemainder, expectedDuty, receivedDuty)
@@ -551,7 +442,7 @@ $(document).ready(function(){
     *@param {Float} expectedPer - The decimal value of the binary number passed to the board for period
     *@param {Float} receivedPer - The measured value of the period
     *@param {Float} minTimeUnit - The length of the minimum time unit
-    ALL UNITS MUST BE CONSISTENT. WE HAVE DESIGNED IT TO BE IN MILLISECONDS
+    *ALL UNITS MUST BE CONSISTENT. WE HAVE DESIGNED IT TO BE IN MILLISECONDS
     */
     function getTimeUnits(expectedPer,receivedPer,minTimeUnit)
     {
@@ -588,7 +479,90 @@ $(document).ready(function(){
         console.log('AVERAGE OFF TIME ERROR' + offSum/offList.length);
     }
 
+    //-------------------------------------------------------------------
+    /*This function will push a test case to the board and perform various operations on the data
+    *@param {String} periodToSend - A binary string representing the period
+    *@param {String} dutyToSend - A binary string representing the duty cycle
+    *@param {String} index - A string representing which test case it is, represents either a number or phrase
+    *@param {Float} expectedOnTime - A number that represents how long each rise should be for this test case
+    *@param {Float} expectedOffTime - A number that represents how long each fall should be for this test case
+    *@param {String} graphID - A string that determines which div element the graph will go on
+    */
+    async function sendTestCase(periodToSend, dutyToSend, index, expectedOnTime, expectedOffTime, graphID)
+    {
+        var onList = []; //Stores measured on time for each rise
+        var offList = []; //Stores measured off time for each fall
 
+        //Initialize the measured and expected graph
+        initGraph(graphID, 'Test Case: ' + index, 'Your Results');
+        initGraph(graphID, 'Test Case: ' + index, 'Expected Results');
+
+
+        //Send period followed by duty cycle to test board
+        await sendData(device,'0'); //Tell device this is assignment 0
+        await sendData(device, periodToSend); 
+        await sendData(device, dutyToSend);
+
+        //Loop until the testboard is finished sending data
+        await plotOscilloscope(device,offList,onList,expectedOffTime, expectedOnTime ,graphID, runMeasuredTrace, runExpTrace);
+        //Receive calculated period and duty cycle from device last
+        
+        //Check for timeOut error
+        var checkStatus = await receiveData(device);
+        if(checkStatus < 0){
+            $('#' + elementID).after('<div>There was a TIMEOUT ERROR while processing ' +
+                'test case ' + index + '.</div>');
+        }
+        else{
+            var finalResult = ''; //What will be saved to text file on server side
+            var lastName = 'last'; //Used to store last name of student
+            var firstName = 'first'; //Used to store first name of student
+            calculateTotalError(onList,offList,expectedOnTime,expectedOffTime, index);
+            console.log('ONTIMES: for test case ' + index + ': ' + onList);
+            console.log('OFFTIMES: for test case ' + index + ': ' + offList);
+            //This function is used for the reduce function to sum the arrays
+            const add = (a, b) =>
+                (a + b)
+            var sumOnTimes = onList.reduce(add); //Sums array
+            var sumOffTimes = offList.reduce(add); 
+            var period = (sumOnTimes + sumOffTimes)/onList.length; //Does not matter which list length is used
+            var dCycle = (sumOnTimes / (sumOnTimes + sumOffTimes));
+            var expectedPer = expectedOnTime + expectedOffTime;  //Get expected period for this test case
+            var expectedDuty = expectedOnTime / expectedPer; //Get expected duty cycle for this test case
+            console.log('Expected Period: ' + expectedPer + '   Expected Duty ' + expectedDuty);
+            var periodRemainder = getTimeUnits(expectedPer,period,TIME_UNIT).toFixed(SIG_FIGS);
+            var grade = gradeData(periodRemainder, expectedDuty, dCycle);
+            //finalResult is what will be saved on server side for teach access
+            finalResult += 'Test Case: ' + index + '\n' +
+                'Period received: ' + period + 'ms\n' +
+                'Duty Cycle received: ' + dCycle*100 + '%\n' +
+                'Number of time units off: ' + periodRemainder + '\n' +
+                'Grade: ' + grade + '%\n' + '\n' + '\n' ;
+            //Append results to browser
+            $('#' + graphID).after('<div>Test Case: ' + index + '</div>' +
+                '<div>Period received: ' + period + 'ms</div>' +
+                '<div>Duty Cycle received: ' + dCycle*100 + '%</div>' +
+                '<div>Number of time units off: ' + periodRemainder + '</div>' +
+                '<div>Grade: ' + grade + '%</div><br>'); 
+        }
+    }
+
+    //-------------------------------------------------------------------
+    /*This function turn a light on or off
+    *@param {String} lightNumber - Determines which light will blink on or off
+    */
+    async function blinkLight(lightNumber)
+    {
+        try{
+                disableButtons(true);
+                await connectDev(device);
+                await sendData(device, lightNumber); //Indicate this is blinky3 assignment with 3
+                await closeDev(device);
+            } catch(err){
+                console.log(err);
+            }
+            disableButtons(false);
+    }
 
 
 
