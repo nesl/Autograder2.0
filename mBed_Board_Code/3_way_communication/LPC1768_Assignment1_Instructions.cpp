@@ -17,7 +17,7 @@
 #define MAX_BUF_SIZE (1024)
 #define NUM_PERIOD_PINS (5)
 #define NUM_DUTY_CYCLE_PINS (7)
-#define SIG_FIGS (10)
+#define SIG_FIGS (4)
 #define MIN_TIME_UNIT (.0002) //ms
 #define NUM_TIME_UNITS (25000)
 #define RECORDING_TIME (MIN_TIME_UNIT * NUM_TIME_UNITS)
@@ -61,7 +61,7 @@ void sendAllData(float list[], int numElements, float & avgPeriod, float &avgDut
 void sendError(void);
 void sendBinary(uint8_t buffer[], DigitalOut list[], int size);
 void timeLiveGraph(float &period, float &duty); //Sends live timestamps of rises/falls
-void convertFloatToBuf(float num, uint8_t buf[], int sigFigs);
+void convertFloatToBuf(float num, uint8_t buf[]);
 void writeToBrowser(uint8_t buffer[]);
 void readDataFromBrowser(uint8_t * buffer, uint32_t & len);
 void sendStop(void);
@@ -116,8 +116,8 @@ void assignmentOne()
         uint8_t *perBuf, *dutyBuf; 
         perBuf = new uint8_t[SIG_FIGS];
         dutyBuf = new uint8_t[SIG_FIGS];
-        convertFloatToBuf(period, perBuf, SIG_FIGS);
-        convertFloatToBuf(duty, dutyBuf, SIG_FIGS);
+        convertFloatToBuf(period, perBuf);
+        convertFloatToBuf(duty, dutyBuf);
         writeToBrowser(perBuf);
         writeToBrowser(dutyBuf);
         delete [] perBuf; //Deallocate memory
@@ -175,7 +175,6 @@ void timeLiveGraph(float &period, float &duty) //Function that times board
             period = -1.0;
         else
             sendAllData(timeList,numElements, period, duty);
-
         delete [] timeList;
         timeList = 0;
     }
@@ -184,19 +183,18 @@ void timeLiveGraph(float &period, float &duty) //Function that times board
         pc.printf("Error. Timeout occurred.\n\r");
         period = -1.0;
     }
-    sendStop();//Send the stop string to tell the browser to stop reading
+    sendStop();//Tell the browser to stop reading
 }
 //-----------------------------------------------------------
-void convertFloatToBuf(float num, uint8_t buf[], int sigFigs) //Converts a float to a uint8_t buffer to send
+void convertFloatToBuf(float num, uint8_t buf[]) //Converts a float to a uint8_t buffer to send
 {
-    ostringstream oss;
-    oss << setprecision(sigFigs);
-    oss << num;
-    string key = oss.str(); //Converts float to string first
-    for(int i=0;i<sigFigs;++i)
-    {
-        buf[i] = static_cast<uint8_t>(key[i]);
-    }
+    memcpy(buf, &num, sizeof(num));
+    uint8_t temp = buf[3];
+    buf[3] = buf[0];
+    buf[0] = temp;
+    temp = buf[2];
+    buf[2] = buf[1];
+    buf[1] = temp;    
 }
 //----------------------------------------------------------
 void writeToBrowser(uint8_t buffer[]) //Sends data to the browser
@@ -243,16 +241,11 @@ int readCommand(void)//receives the necessary command
 //----------------------------------------------------------
 void sendError(void)
 {
-    pc.printf("In error function\r\n");
     uint8_t *errBuf1, *errBuf2;
-    errBuf1 = new uint8_t[MAX_BUF_SIZE];
-    errBuf2 = new uint8_t[MAX_BUF_SIZE];
-    string timeout = "TIMEOUT ";
-    string error = "ERROR!!!";
-    for(int i = 0;i < timeout.length();++i)
-        errBuf1[i] = static_cast<uint8_t>(timeout[i]);
-    for(int i = 0;i < error.length();++i)
-        errBuf2[i] = static_cast<uint8_t>(error[i]);
+    errBuf1 = new uint8_t[SIG_FIGS];
+    errBuf2 = new uint8_t[SIG_FIGS];
+    convertFloatToBuf(-1.000,errBuf1);
+    convertFloatToBuf(-1.000,errBuf2);
     writeToBrowser(errBuf1);
     writeToBrowser(errBuf2);
     delete [] errBuf1;
@@ -268,13 +261,12 @@ void sendAllData(float list[], int numElements, float & avgPeriod, float &avgDut
     float totOnTime = 0; //Only measures the rises
     float totTime = 0; //Measures the entire time
     if(numElements % 2 != 0)
-        --numElements; //Discarding extra timestamp
+        --numElements; //Discarding extra timestamp for half cycle
     //Every other iteration will be off or on timestamp. Off time is first
     for(int i=0;i<numElements;i++)
     {
             dataBuffer = new uint8_t[SIG_FIGS];
-            convertFloatToBuf(list[i] - currentTime, dataBuffer, SIG_FIGS);
-            //totTime += (list[i] - currentTime);
+            convertFloatToBuf(list[i] - currentTime, dataBuffer);
             if(i % 2 != 0) //Odd indices represent on times
                 totOnTime += list[i] - currentTime; 
             currentTime = list[i];
@@ -283,7 +275,7 @@ void sendAllData(float list[], int numElements, float & avgPeriod, float &avgDut
             dataBuffer = 0;
     }
     totTime = list[numElements - 1];
-    avgPeriod = totTime/(numElements*2); //*2 because there are 2 elements per cycle
+    avgPeriod = totTime/(numElements/2); //*2 because there are 2 elements per cycle
     avgDutyCycle = totOnTime / totTime;
 }
 //-----------------------------------------------------------
@@ -291,9 +283,7 @@ void sendStop(void)
 {
     uint8_t * stop;
     stop = new uint8_t[SIG_FIGS];
-    string stopString = "STOP";
-    for(int i=0;i<stopString.length();++i)
-        stop[i] = static_cast<uint8_t>(stopString[i]);
+    convertFloatToBuf(-1.000, stop);
     writeToBrowser(stop);
     delete [] stop;
     stop = 0;

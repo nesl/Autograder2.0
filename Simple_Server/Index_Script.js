@@ -39,13 +39,9 @@ $(document).ready(function(){
             value: 0x01,
             index: 0x02
         });
-        //console.log('Receiving Data...');
-        //Waiting for 64bytes of data from endpoint #5, store that data in result
-        let result = await device.transferIn(5,64);
-        //console.log('Data Received');
-        //Decode and print the message
-        let decoder = new TextDecoder();
-        return decoder.decode(result.data);
+        //Waiting for 4 bytes of data from endpoint #5, store that data in result
+        let result = await device.transferIn(5,4);
+        return (result.data.getFloat32()); //Convert raw bytes into float
     }
 
     //-------------------------------------------------------------------
@@ -241,51 +237,51 @@ $(document).ready(function(){
             var expOnTime = period * (dutyCycle/100); //Determine expected on time for each rise
             var expOffTime = period - expOnTime; //Determine expected off time for each fall
             if(validate(period,dutyCycle)){
-            try{
-                //Convert from decimal to binary
-                var bPeriod = perDecimaltoBinary(period);
-                var bDutyCycle = dCycleDecimaltoBinary(dutyCycle);
-                disableButtons(true);
-                await connectDev(device);
-                //Send period and duty cycle to device
-                await sendData(device,'0');
-                await sendData(device,bPeriod); 
-                await sendData(device,bDutyCycle);
-                //Initialize the measured and expected graph
-                initGraph(elementID,gTitle, 'Your Results');
-                initGraph(elementID,gTitle, 'Expected Results');
-                //Plot PWM wave in graph
-                await plotOscilloscope(device,offList,onList,expOffTime,expOnTime,elementID,measuredTrace, expTrace);
+                try{
+                    //Convert from decimal to binary
+                    var bPeriod = perDecimaltoBinary(period);
+                    var bDutyCycle = dCycleDecimaltoBinary(dutyCycle);
+                    disableButtons(true);
+                    await connectDev(device);
+                    //Send period and duty cycle to device
+                    await sendData(device,'0');
+                    await sendData(device,bPeriod); 
+                    await sendData(device,bDutyCycle);
+                    //Initialize the measured and expected graph
+                    initGraph(elementID,gTitle, 'Your Results');
+                    initGraph(elementID,gTitle, 'Expected Results');
+                    //Plot PWM wave in graph
+                    await plotOscilloscope(device,offList,onList,expOffTime,expOnTime,elementID,measuredTrace, expTrace);
 
-                measuredTrace += 2;
-                expTrace += 2;
-                //Receive period and duty cycle
-                var perResult = await receiveData(device);
-                var dutyResult = await receiveData(device);
-                var elementID = 'user-graph';
-                //Check for time out error
-                if(perResult.charAt(0) == 'T'){
-                        $('#' + elementID).after('<div>There was a TIMEOUT ERROR while processing ' +
-                            'test case ' + index + '. Please reset the tester board.</div>');
-                }
-                //Otherwise display results
-                else{
-                    var per = (parseFloat(perResult) * 1000).toFixed(SIG_FIGS);; //Convert from seconds to ms
-                    var dCycle = (parseFloat(dutyResult) * 100).toFixed(SIG_FIGS);
-                    var periodRemainder = getTimeUnits(period,perResult,TIME_UNIT).toFixed(SIG_FIGS);
-                    $('#' + elementID).after('<div>Manual Test Case'  + '</div>' +
-                            '<div>Period received: ' + per + 'ms</div>' +
-                            '<div>Duty Cycle received: ' + dCycle + '%</div>' +
-                            '<div>Number of time units off: ' + periodRemainder + '</div>' +
-                            '<br>'); 
-                }
+                    measuredTrace += 2;
+                    expTrace += 2;
+                    //Receive period and duty cycle
+                    var perResult = await receiveData(device);
+                    var dutyResult = await receiveData(device);
+                    var elementID = 'user-graph';
+                    //Check for time out error
+                    if(perResult*1 < 0){
+                            $('#' + elementID).after('<div>There was a TIMEOUT ERROR while processing ' +
+                                'test case ' + index + '. Please reset the tester board.</div>');
+                    }
+                    //Otherwise display results
+                    else{
+                        var per = (parseFloat(perResult) * 1000).toFixed(SIG_FIGS);; //Convert from seconds to ms
+                        var dCycle = (parseFloat(dutyResult) * 100).toFixed(SIG_FIGS);
+                        var periodRemainder = getTimeUnits(period,perResult,TIME_UNIT).toFixed(SIG_FIGS);
+                        $('#' + elementID).after('<div>Manual Test Case'  + '</div>' +
+                                '<div>Period received: ' + per + 'ms</div>' +
+                                '<div>Duty Cycle received: ' + dCycle + '%</div>' +
+                                '<div>Number of time units off: ' + periodRemainder + '</div>' +
+                                '<br>'); 
+                    }
 
-                await closeDev(device);
-            } catch(err){
-                console.log(err);
+                    await closeDev(device);
+                } catch(err){
+                    console.log(err);
+                }
+                disableButtons(false);
             }
-            disableButtons(false);
-        }
         })
     }
 
@@ -360,7 +356,7 @@ $(document).ready(function(){
                     console.log('Duty Cycle: ' + dCycle);
 
                     //Check for timeOut error
-                    if(period.charAt(0) == 'T'){
+                    if(period*1 < 0){
                         $('#' + elementID).after('<div>There was a TIMEOUT ERROR while processing ' +
                             'test case ' + index + '.</div>');
                     }
@@ -424,7 +420,7 @@ $(document).ready(function(){
         while(true){
             //Receive timeOff first
             var timeOff = await receiveData(device);
-            if(timeOff.charAt(0) == 'S'){ //check that the device is still sending data
+            if(timeOff*1 < 0){ //check that the device is still sending data
                 break; //Break from the loop if there is no more data
             }
             var ftimeOff = timeOff*1; //Convert timeOff to float
@@ -435,7 +431,7 @@ $(document).ready(function(){
 
             //Receive timeOn next
             var timeOn = await receiveData(device);
-            if(timeOn.charAt(0) == 'S'){ //check that the device is still sending data
+            if(timeOn*1 < 0){ //check that the device is still sending data
                 break; //Break from the loop if there is no more data
             }
             var ftimeOn = timeOn*1; //Convert timeOn to float
@@ -512,8 +508,6 @@ $(document).ready(function(){
             xaxis:{title: 'Time (ms)'}});
     }
 
-
-
     //-------------------------------------------------------------------
     /*This function appends a rise/fall of PWM wave
     *@param {int} x1 - The measured time of the current edge
@@ -531,7 +525,6 @@ $(document).ready(function(){
         //[trace 0, trace 1]
         Plotly.extendTraces(elementID, {y:[[y1,y2],[y1,y2]], x:[[x1,x1],[x2,x2]]}, [measuredTrace,expTrace])
     }
-
 
     //-------------------------------------------------------------------
     /*This function grades a set of received data
@@ -568,6 +561,7 @@ $(document).ready(function(){
         return Math.abs((expectedPer - receivedPer)/minTimeUnit);
     }
     
+    //-------------------------------------------------------------------
     /*This function is to test how accurate the timing algorithm is. It is for debugging purposes only
     *@param {Float []} onList - A list of timestamps representing the length of rises for that wave
     *@param {Float []} offList - A list of timestamps representing the length of falls for that wave
@@ -595,6 +589,9 @@ $(document).ready(function(){
         console.log('TOTAL ERROR FOR OFF TIMES FOR TEST CASE ' + caseNum + ': ' + offSum);
     }
 
-//Entire program needs to be in bracket below
+
+
+
+
 
 })
