@@ -256,13 +256,12 @@ $(document).ready(function(){
                     measuredTrace += 2;
                     expTrace += 2;
                     //Receive period and duty cycle
-                    var perResult = await receiveData(device);
-                    var dutyResult = await receiveData(device);
+                    var checkStatus = await receiveData(device);
                     var elementID = 'user-graph';
                     //Check for time out error
-                    if(perResult*1 < 0){
+                    if(checkStatus < 0){
                             $('#' + elementID).after('<div>There was a TIMEOUT ERROR while processing ' +
-                                'test case ' + index + '. Please reset the tester board.</div>');
+                                'test case ' + index + '</div>');
                     }
                     //Otherwise display results
                     else{
@@ -350,22 +349,23 @@ $(document).ready(function(){
                     console.log('OFFTIMES: for test case ' + index + ': ' + offList);
 
                     //Receive calculated period and duty cycle from device last
-                    var period = await receiveData(device);
-                    console.log('Period: ' + period);
-                    var dCycle = await receiveData(device);
-                    console.log('Duty Cycle: ' + dCycle);
-
+                    
+                    var checkStatus = await receiveData(device);
                     //Check for timeOut error
-                    if(period*1 < 0){
+                    if(checkStatus < 0){
                         $('#' + elementID).after('<div>There was a TIMEOUT ERROR while processing ' +
                             'test case ' + index + '.</div>');
                     }
                     else{
                         //finalResult is what will be saved on server side for teach access
-                        period *= 1000;
-                        dCycle *= 100;
+                        const add = (a, b) =>
+                            (a + b)
+                        var sumOnTimes = onList.reduce(add); //Sums array
+                        var sumOffTimes = offList.reduce(add); 
+                        var period = (sumOnTimes + sumOffTimes)/onList.length;
+                        var dCycle = (sumOnTimes / (sumOnTimes + sumOffTimes));
                         var expectedPer = (parseInt(perList[i], 2) + 1)*10;  //Get expected period for this test case
-                        var expectedDuty = parseInt(dutyList[i],2); //Get expected duty cycle for this test case
+                        var expectedDuty = parseInt(dutyList[i],2)/100; //Get expected duty cycle for this test case
                         var periodRemainder = getTimeUnits(expectedPer,period,TIME_UNIT).toFixed(SIG_FIGS);
                         var grade = gradeData(periodRemainder, expectedDuty, dCycle);
                         finalResult += 'Test Case: ' + index + '\n' +
@@ -419,24 +419,22 @@ $(document).ready(function(){
         var count = 0;
         while(true){
             //Receive timeOff first
-            var timeOff = await receiveData(device);
-            if(timeOff*1 < 0){ //check that the device is still sending data
+            var timeOff = (await receiveData(device))*1000 - totalTime; //1000 converts to ms
+            if(timeOff < 0){ //check that the device is still sending data
                 break; //Break from the loop if there is no more data
             }
-            var ftimeOff = timeOff*1; //Convert timeOff to float
-            offList.push(ftimeOff*1000); //Store measured offTime to offList
-            totalTime+= (ftimeOff*1000); //Updated totalTime (s to ms)
+            offList.push(timeOff); //Store measured offTime to offList
+            totalTime += (timeOff); //Updated totalTime (s to ms)
             exptotalTime += (expOffTime); //Update expected time (ms)
             appendGraph(totalTime, exptotalTime, 0,1,elementID,mTrace,eTrace); //Append both graphs with new data
 
             //Receive timeOn next
-            var timeOn = await receiveData(device);
-            if(timeOn*1 < 0){ //check that the device is still sending data
+            var timeOn = (await receiveData(device))*1000 - totalTime;
+            if(timeOn < 0){ //check that the device is still sending data
                 break; //Break from the loop if there is no more data
             }
-            var ftimeOn = timeOn*1; //Convert timeOn to float
-            onList.push(ftimeOn*1000); //Store measured onTime to onList
-            totalTime+= (ftimeOn*1000); //Updated totalTime (s to ms)
+            onList.push(timeOn); //Store measured onTime to onList
+            totalTime+= (timeOn); //Updated totalTime (s to ms)
             exptotalTime += (expOnTime); //Update expected time (ms)
             appendGraph(totalTime, exptotalTime, 1,0,elementID, mTrace, eTrace); //Append both graphs with new data
 
@@ -531,20 +529,19 @@ $(document).ready(function(){
     *@param {Float} periodRemainder - The number of time units the students answer was off by
     *@param {Float} expectedDuty - The decimal value of the binary number passed to the board for duty cycle
     *@param {Float} receivedDuty - The measured duty cycle
+    *FUNCTIONALITY FOR GRADING DUTY CYCLE MUST BE ADDED BE ADDED LATER
     */
+
     function gradeData(periodRemainder, expectedDuty, receivedDuty)
     {
-        if(periodRemainder < 1) //Checking if error was within one time unit
-        {
+        if(periodRemainder < 1){ //Checking if error was within one time unit
             return 100;
         }
         var penalty = 3*(periodRemainder - 1)*(periodRemainder - 1); //squaring it
-        if(penalty >= 100) //Checking if error exceeds 100%
-        {
+        if(penalty >= 100){ //Checking if error exceeds 100%
             return 0;
         }
-        else
-        {
+        else{
             return (100-penalty);
         }
     }
@@ -587,6 +584,8 @@ $(document).ready(function(){
         }
         console.log('TOTAL ERROR FOR ON TIMES FOR TEST CASE ' + caseNum + ': ' + onSum);
         console.log('TOTAL ERROR FOR OFF TIMES FOR TEST CASE ' + caseNum + ': ' + offSum);
+        console.log('AVERAGE ON TIME ERROR ' + onSum/onList.length);
+        console.log('AVERAGE OFF TIME ERROR' + offSum/offList.length);
     }
 
 
