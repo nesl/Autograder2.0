@@ -234,9 +234,8 @@ $(document).ready(function(){
     //-------------------------------------------------------------------
     /*This is used to several test cases to the test board. The test cases are sent
     and then the time stamps are received by the test board. These time stamps are 
-    formatted to be displayed on the browser. The time stamps are displaeyd dynamically.
-    The measured wave along with the expected wave (what the wave should look like) will
-    be displayed.*/
+    formatted to be displayed on the browser. The measured wave along with the expected 
+    wave (what the wave should look like) will be displayed.*/
     if (liveGraph){
         $(liveGraph).click(async () => {
             //let device;
@@ -341,7 +340,7 @@ $(document).ready(function(){
     }
 
     //-------------------------------------------------------------------
-    /*This functio is used to validate period and duty cycle*/
+    /*This function is used to validate period and duty cycle*/
     function validate(period,dutyCycle){
         if(period < MIN_PERIOD || period > MAX_PERIOD || (period % 10 != 0)){
                 alert('Error: Period is outside range, please enter a period between ' + MIN_PERIOD +
@@ -548,7 +547,7 @@ $(document).ready(function(){
     }
 
     //-------------------------------------------------------------------
-    /*This function turn a light on or off
+    /*This function turns a light on or off
     *@param {String} lightNumber - Determines which light will blink on or off
     */
     async function blinkLight(lightNumber)
