@@ -1,4 +1,5 @@
 #!/usr/bin/python
+#THIS CODE MUST BE RUN USING PYTHON 2.7
 import BaseHTTPServer, SimpleHTTPServer
 import ssl
     
