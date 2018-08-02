@@ -57,13 +57,13 @@ Serial pc(USBTX, USBRX);
 //Helper Function Prototypes; Definitions below main
 int readCommand(void);
 void assignmentOne(void);
-void sendAllData(float list[], int numElements);
+void sendAllData(int list[], int numElements);
 void sendBinary(uint8_t buffer[], DigitalOut list[], int size);
-void timeLiveGraph(float &checker); //Sends live timestamps of rises/falls
-void convertFloatToBuf(float num, uint8_t buf[]);
+void timeLiveGraph(); //Sends live timestamps of rises/falls
+void convertIntToBuf(int num, uint8_t buf[]);
 void writeToBrowser(uint8_t buffer[]);
 void readDataFromBrowser(uint8_t * buffer, uint32_t & len);
-void sendStop(float &checker);
+void sendStop(int checker);
 
 //USB object
 WebUSBCDC webUSB(0x1F00,0x2012,0x0001, false);
@@ -88,7 +88,6 @@ int main()
 //-----------------------------------------------------------
 void assignmentOne()
 {
-    float checker = 1;
     uint32_t lenPer, lenDuty; //Leave undeclared, or else read function will not work
     uint8_t * perBuf1, * dutyBuf1;
     perBuf1 = new uint8_t[MAX_BUF_SIZE]; //Dynamically allocated because read function prefers it
@@ -102,9 +101,8 @@ void assignmentOne()
     perBuf1 = 0; //Dereference pointers
     dutyBuf1 = 0; 
     req = 1; //Send signal for other board to generate waves
-    timeLiveGraph(checker); //Period and duty cycle will be returned by reference
+    timeLiveGraph(); //Period and duty cycle will be returned by reference
     req = 0; //Set signal to 0 so that it can rise again
-    sendStop(checker); //If checker is -1, browser will interpret as an error
 }
 //-----------------------------------------------------------
 void sendBinary(uint8_t buffer[], DigitalOut list[], int size) //Function that sends signals to student board
@@ -118,30 +116,32 @@ void sendBinary(uint8_t buffer[], DigitalOut list[], int size) //Function that s
     }
 }
 //-----------------------------------------------------------
-void timeLiveGraph(float &checker) //Function that times board
+void timeLiveGraph() //Function that times board
 {
+    int checker = 1;
     Timer totTime;
     Timer timeOut;
+    Timer currentTime;
     int signal = 0;
-    //int temp;
     int numElements = 0;
     timeOut.start(); //Start time out so that it can count while waiting for a fresh cycle
     while (!PWM_API.read() && timeOut.read() < 5.0){}
     while (PWM_API.read() && timeOut.read() < 5.0){} //These loops ensure that timing begins on a fresh cycle
     if(timeOut.read() <= 4.9)
     {
-        float *timeList; 
-        timeList = new float [MAX_BUF_SIZE];
+        int *timeList; 
+        timeList = new int [MAX_BUF_SIZE];
         while (!PWM_API.read() && timeOut.read() < 10.0){}
         while (PWM_API.read() && timeOut.read() < 10.0){}
         totTime.start();
+        currentTime.start();
         while(totTime.read() < RECORDING_TIME)
         {
-            //temp = PWM_API.read();
-            if(signal != PWM_API.read())//temp)
+            if(signal != PWM_API.read())
             {
-                timeList[numElements] = totTime.read();
-                signal = PWM_API;//temp
+                timeList[numElements] = currentTime.read_us();
+                //currentTime.reset();
+                signal = PWM_API.read();
                 ++numElements;
             }
         }
@@ -156,14 +156,12 @@ void timeLiveGraph(float &checker) //Function that times board
         timeList = 0;
     }
     else
-    {
-        pc.printf("Error. Timeout occurred.\n\r");
         checker = -1.0;
-    }
-    sendStop(checker);//Tell the browser to stop reading
+    sendStop(-1); //Tells the browser to stop reading
+    sendStop(checker);//Tells the browser good(1) or error(-1)
 }
 //-----------------------------------------------------------
-void convertFloatToBuf(float num, uint8_t buf[]) //Converts a float to a uint8_t buffer to send
+void convertIntToBuf(int num, uint8_t buf[]) //Converts a int to a uint8_t buffer to send
 {
     memcpy(buf, &num, sizeof(num));
     uint8_t temp = buf[3];
@@ -171,7 +169,7 @@ void convertFloatToBuf(float num, uint8_t buf[]) //Converts a float to a uint8_t
     buf[0] = temp;
     temp = buf[2];
     buf[2] = buf[1];
-    buf[1] = temp;    
+    buf[1] = temp;
 }
 //----------------------------------------------------------
 void writeToBrowser(uint8_t buffer[]) //Sends data to the browser
@@ -216,27 +214,29 @@ int readCommand(void)//receives the necessary command
     return choice;
 }
 //-----------------------------------------------------------
-void sendAllData(float list[], int numElements)
+void sendAllData(int list[], int numElements)
 {
     uint8_t *dataBuffer;
     if(numElements % 2 != 0)
         --numElements; //Discarding extra timestamp for half cycle
+    int currentTime = 0;
     //Every other iteration will be off or on timestamp. Off time is first
     for(int i=0;i<numElements;i++)
     {
-            dataBuffer = new uint8_t[SIG_FIGS];
-            convertFloatToBuf(list[i], dataBuffer);
+            dataBuffer = new uint8_t[sizeof(list[i])];
+            convertIntToBuf(list[i] - currentTime, dataBuffer);
+            currentTime = list[i];
             writeToBrowser(dataBuffer);
             delete [] dataBuffer;
             dataBuffer = 0;
     }
 }
 //-----------------------------------------------------------
-void sendStop(float &checkNum)
+void sendStop(int checkNum)
 {
     uint8_t * stop;
-    stop = new uint8_t[SIG_FIGS];
-    convertFloatToBuf(checkNum, stop);
+    stop = new uint8_t[sizeof(checkNum)];
+    convertIntToBuf(checkNum, stop);
     writeToBrowser(stop);
     delete [] stop;
     stop = 0;

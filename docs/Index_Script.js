@@ -29,7 +29,7 @@ $(document).ready(function(){
 
     //------------------------------------------------------------------
     /*This function is used to receive data from device, function will return 
-    the data received*/
+    the data received.*/
     async function receiveData(device){
         //Make the device ready to receive data
         await device.controlTransferOut({
@@ -41,7 +41,13 @@ $(document).ready(function(){
         });
         //Waiting for 4 bytes of data from endpoint #5, store that data in result
         let result = await device.transferIn(5,4);
-        return (result.data.getFloat32()); //Convert raw bytes into float
+        var theNum = result.data.getUint32();
+        
+        //This value is what an unsigned integer returns when it is assigned to be -1. This indicates either a stop message or an error
+        if(theNum == 4294967295){ 
+            return -1; 
+        }
+        return (theNum/1000); //Convert raw bytes into int (micro), divide 1000 to go to ms
     }
 
     //-------------------------------------------------------------------
@@ -309,8 +315,8 @@ $(document).ready(function(){
         var count = 0;
         while(true){
             //Receive timeOff first
-            var timeOff = (await receiveData(device))*1000 - totalTime; //1000 converts to ms
-            if(timeOff < 0){ //check that the device is still sending data
+            var timeOff = (await receiveData(device))*1;
+            if(timeOff < 0){ //check that the device is still sending data. -1 will become this value if it is unsigned int
                 break; //Break from the loop if there is no more data
             }
             offList.push(timeOff); //Store measured offTime to offList
@@ -319,7 +325,7 @@ $(document).ready(function(){
             appendGraph(totalTime, exptotalTime, 0,1,elementID,mTrace,eTrace); //Append both graphs with new data
 
             //Receive timeOn next
-            var timeOn = (await receiveData(device))*1000 - totalTime;
+            var timeOn = (await receiveData(device))*1;
             if(timeOn < 0){ //check that the device is still sending data
                 break; //Break from the loop if there is no more data
             }
@@ -509,7 +515,7 @@ $(document).ready(function(){
         //Check for timeOut error
         var checkStatus = await receiveData(device);
         if(checkStatus < 0){
-            $('#' + graphID).after('<div>There was a TIMEOUT ERROR while processing ' +
+            $('#' + elementID).after('<div>There was a TIMEOUT ERROR while processing ' +
                 'test case ' + index + '.</div>');
         }
         else{
@@ -556,12 +562,14 @@ $(document).ready(function(){
                 disableButtons(true);
                 await connectDev(device);
                 await sendData(device, lightNumber); //Indicate this is blinky3 assignment with 3
+
                 await closeDev(device);
             } catch(err){
                 console.log(err);
             }
             disableButtons(false);
     }
+
 
 
 
