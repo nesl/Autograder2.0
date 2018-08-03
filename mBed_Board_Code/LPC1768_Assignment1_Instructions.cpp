@@ -96,13 +96,13 @@ void assignmentOne()
     readDataFromBrowser(dutyBuf1, lenDuty);
     sendBinary(perBuf1, perList, NUM_PERIOD_PINS); //Sends data for other board to interpret
     sendBinary(dutyBuf1, dutyList, NUM_DUTY_CYCLE_PINS);
-    delete [] perBuf1; //Deallocating memory
+    delete [] perBuf1; 
     delete [] dutyBuf1;
-    perBuf1 = 0; //Dereference pointers
+    perBuf1 = 0; 
     dutyBuf1 = 0; 
     req = 1; //Send signal for other board to generate waves
-    timeLiveGraph(); //Period and duty cycle will be returned by reference
-    req = 0; //Set signal to 0 so that it can rise again
+    timeLiveGraph(); 
+    req = 0; //Set signal to 0 so that it can rise again later
 }
 //-----------------------------------------------------------
 void sendBinary(uint8_t buffer[], DigitalOut list[], int size) //Function that sends signals to student board
@@ -140,7 +140,6 @@ void timeLiveGraph() //Function that times board
             if(signal != PWM_API.read())
             {
                 timeList[numElements] = currentTime.read_us();
-                //currentTime.reset();
                 signal = PWM_API.read();
                 ++numElements;
             }
@@ -219,7 +218,7 @@ void sendAllData(int list[], int numElements)
     uint8_t *dataBuffer;
     if(numElements % 2 != 0)
         --numElements; //Discarding extra timestamp for half cycle
-    int currentTime = 0;
+    int currentTime = 0; //Stores total time so that the difference can be sent (eg. off or on time) rather than total time
     //Every other iteration will be off or on timestamp. Off time is first
     for(int i=0;i<numElements;i++)
     {
