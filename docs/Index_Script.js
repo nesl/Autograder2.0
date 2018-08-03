@@ -497,7 +497,7 @@ $(document).ready(function(){
         //Check for timeOut error
         var checkStatus = await receiveData(device);
         if(checkStatus < 0){
-            $('#' + elementID).after('<div>There was a TIMEOUT ERROR while processing ' +
+            $('#' + graphID).after('<div>There was a TIMEOUT ERROR while processing ' +
                 'test case ' + index + '.</div>');
         }
         else{
