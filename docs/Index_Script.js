@@ -114,7 +114,6 @@ $(document).ready(function(){
     //-------------------------------------------------------------------    
     /*Define all buttons/variables beforehand*/
     let select = document.getElementById('select');
-    let receive = document.getElementById('request-device');
     let send = document.getElementById('send');
     let liveGraph = document.getElementById('liveGraph');
     let blinky1 = document.getElementById('blinky1');
@@ -127,10 +126,12 @@ $(document).ready(function(){
     var MAX_PERIOD = 320; //Maximum period (ms)
     var MIN_DUTY_CYCLE = 2; //Minimum Duty Cycle (percentage)
     var MAX_DUTY_CYCLE = 98; //Maximum Duty Cycle (percentage)
-    var expTrace = 1;
-    var measuredTrace = 0;
-    var runExpTrace = 1;
-    var runMeasuredTrace = 0;
+    //These variables keep track of how many traces have been drawn for the graphs
+    //They prevent overwrite of previous graphs
+    var manualExpTrace = 1;
+    var manualMeasuredTrace = 0;
+    var expTraceGraphAll = 1;
+    var measuredTraceGraphAll = 0;
     let device;
     //Start with all buttons disabled until device is selected
     disableButtons(true);
@@ -183,26 +184,6 @@ $(document).ready(function(){
         })
     }
 
-
-    //-------------------------------------------------------------------
-    /*Defining what happens when the receive button is clicked. This is meant
-    to receive data from the test board and print to console*/
-    //Check that the button exists
-    if(receive){
-        //What happens when the button is clicked
-        $(receive).click(async() => {
-            try {
-                disableButtons(true);
-                await connectDev(device);//Connect the device
-                await receiveData(device);//Receive data from device
-                await closeDev(device);//Close the device
-            } catch (err){
-                console.log(err);//Error occured
-            }
-            disableButtons(false);
-        })
-    }
-
     //-------------------------------------------------------------------
     /*Defines what happens when the send button is clicked. This is used to 
     send period and duty cycle (user input) to the test board and then receive the time 
@@ -226,12 +207,13 @@ $(document).ready(function(){
                     disableButtons(true);
                     await connectDev(device);
                     //Send period and duty cycle to device
-                    await sendTestCase(bPeriod, bDutyCycle, gTitle, expOnTime, expOffTime, graphLocation);
-
+                    await sendTestCase(bPeriod, bDutyCycle, gTitle, expOnTime, expOffTime, graphLocation, manualMeasuredTrace, manualExpTrace);
                     await closeDev(device);
                 } catch(err){
                     console.log(err);
                 }
+                manualExpTrace += 2;
+                manualMeasuredTrace += 2;
                 disableButtons(false);
             }
         })
@@ -275,7 +257,7 @@ $(document).ready(function(){
                 await connectDev(device);
                 for(var i=0; i<NUM_CASES; i+=1){
                     var graphElement = 'plotly-test' + index.toString(); //Get which test case this is
-                    await sendTestCase(perList[i], dutyList[i], index, expOnList[i], expOffList[i], graphElement);
+                    await sendTestCase(perList[i], dutyList[i], index, expOnList[i], expOffList[i], graphElement, measuredTraceGraphAll, expTraceGraphAll);
                     index++;
                 }
                 /* //Run recordGrades.php to save grades
@@ -288,8 +270,8 @@ $(document).ready(function(){
                     }
                 });*/
 
-                runExpTrace += 2;
-                runMeasuredTrace +=2;
+                expTraceGraphAll += 2;
+                measuredTraceGraphAll +=2;
                 await closeDev(device);
             }
             catch(err){
@@ -493,7 +475,7 @@ $(document).ready(function(){
     *@param {Float} expectedOffTime - A number that represents how long each fall should be for this test case
     *@param {String} graphID - A string that determines which div element the graph will go on
     */
-    async function sendTestCase(periodToSend, dutyToSend, index, expectedOnTime, expectedOffTime, graphID)
+    async function sendTestCase(periodToSend, dutyToSend, index, expectedOnTime, expectedOffTime, graphID, mTrace, eTrace)
     {
         var onList = []; //Stores measured on time for each rise
         var offList = []; //Stores measured off time for each fall
@@ -509,7 +491,7 @@ $(document).ready(function(){
         await sendData(device, dutyToSend);
 
         //Loop until the testboard is finished sending data
-        await plotOscilloscope(device,offList,onList,expectedOffTime, expectedOnTime ,graphID, runMeasuredTrace, runExpTrace);
+        await plotOscilloscope(device,offList,onList,expectedOffTime, expectedOnTime ,graphID, mTrace, eTrace);
         //Receive calculated period and duty cycle from device last
         
         //Check for timeOut error
