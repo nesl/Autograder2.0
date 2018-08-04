@@ -18,8 +18,9 @@
 #define NUM_PERIOD_PINS (5)
 #define NUM_DUTY_CYCLE_PINS (7)
 #define SIG_FIGS (4)
-#define MIN_TIME_UNIT (.0002) //ms
-#define NUM_TIME_UNITS (25000)
+#define MIN_NUM_ELEMENTS (4) //Minimum of 2 cycles, so 4 rises/falls
+#define MIN_TIME_UNIT (.0002) //seconds, 0.2 ms
+#define NUM_TIME_UNITS (25000) 
 #define RECORDING_TIME (MIN_TIME_UNIT * NUM_TIME_UNITS)
 
 //LED's
@@ -55,15 +56,15 @@ DigitalOut dutyList[] = {MSD, DC2, DC3, DC4, DC5, DC6, LSD}; //List of duty cycl
 Serial pc(USBTX, USBRX);
 
 //Helper Function Prototypes; Definitions below main
-int readCommand(void);
-void assignmentOne(void);
-void sendAllData(int list[], int numElements);
-void sendBinary(uint8_t buffer[], DigitalOut list[], int size);
-void timeLiveGraph(); //Sends live timestamps of rises/falls
-void convertIntToBuf(int num, uint8_t buf[]);
-void writeToBrowser(uint8_t buffer[]);
-void readDataFromBrowser(uint8_t * buffer, uint32_t & len);
-void sendStop(int checker);
+int readCommand(void); //Takes a command from the browser
+void assignmentOne(void); //Records PWM waves
+void sendAllData(int list[], int numElements); //Sends list of timestamps to browser
+void sendBinary(uint8_t buffer[], DigitalOut list[], int size); //Toggles period/duty cycle pins
+void timeLiveGraph(); //Sends timestamps of rises/falls
+void convertIntToBuf(int num, uint8_t buf[]); //Converts an integer into a 4 byte uint8_t buffer
+void writeToBrowser(uint8_t buffer[]); //Sends data in the buffer to the browser
+void readDataFromBrowser(uint8_t * buffer, uint32_t & len); //Reads data from the browser, stores in the passed buffer
+void sendStop(int checker); //Sends a 1 to indicate no error or -1 to indicate stop reading OR error
 
 //USB object
 WebUSBCDC webUSB(0x1F00,0x2012,0x0001, false);
@@ -89,17 +90,16 @@ int main()
 void assignmentOne()
 {
     uint32_t lenPer, lenDuty; //Leave undeclared, or else read function will not work
-    uint8_t * perBuf1, * dutyBuf1;
-    perBuf1 = new uint8_t[MAX_BUF_SIZE]; //Dynamically allocated because read function prefers it
-    dutyBuf1 = new uint8_t[MAX_BUF_SIZE];
-    readDataFromBrowser(perBuf1, lenPer); //Storing binary from browser into buffer
-    readDataFromBrowser(dutyBuf1, lenDuty);
-    sendBinary(perBuf1, perList, NUM_PERIOD_PINS); //Sends data for other board to interpret
-    sendBinary(dutyBuf1, dutyList, NUM_DUTY_CYCLE_PINS);
-    delete [] perBuf1; 
-    delete [] dutyBuf1;
-    perBuf1 = 0; 
-    dutyBuf1 = 0; 
+    uint8_t *perBuf = new uint8_t[MAX_BUF_SIZE]; //Dynamically allocated because read function prefers it
+    uint8_t *dutyBuf = new uint8_t[MAX_BUF_SIZE];
+    readDataFromBrowser(perBuf, lenPer); //Storing binary from browser into buffer
+    readDataFromBrowser(dutyBuf, lenDuty);
+    sendBinary(perBuf, perList, NUM_PERIOD_PINS); //Sends data for other board to interpret
+    sendBinary(dutyBuf, dutyList, NUM_DUTY_CYCLE_PINS);
+    delete [] perBuf; 
+    delete [] dutyBuf;
+    perBuf = 0; 
+    dutyBuf = 0; 
     req = 1; //Send signal for other board to generate waves
     timeLiveGraph(); 
     req = 0; //Set signal to 0 so that it can rise again later
@@ -110,59 +110,45 @@ void sendBinary(uint8_t buffer[], DigitalOut list[], int size) //Function that s
     for(int i=0; i<size; ++i)
     {
         if(buffer[i] == '1')
-            list[i] = 1;//Corresponding bit pin is ON
+            list[i] = 1; //Corresponding bit pin is ON
         else
-            list[i] = 0;//Corresponding bit pin is OFF
+            list[i] = 0; //Corresponding bit pin is OFF
     }
 }
 //-----------------------------------------------------------
 void timeLiveGraph() //Function that times board
 {
-    int checker = 1;
-    Timer totTime;
-    Timer timeOut;
-    Timer currentTime;
+    int checker = 1; //Checks for timeout error
     int signal = 0;
     int numElements = 0;
-    timeOut.start(); //Start time out so that it can count while waiting for a fresh cycle
-    while (!PWM_API.read() && timeOut.read() < 5.0){}
-    while (PWM_API.read() && timeOut.read() < 5.0){} //These loops ensure that timing begins on a fresh cycle
-    if(timeOut.read() <= 4.9)
+    int *timeList = new int [MAX_BUF_SIZE];
+    Timer currentTime;
+    currentTime.start();
+    while(currentTime.read() < RECORDING_TIME)
     {
-        int *timeList; 
-        timeList = new int [MAX_BUF_SIZE];
-        while (!PWM_API.read() && timeOut.read() < 10.0){}
-        while (PWM_API.read() && timeOut.read() < 10.0){}
-        totTime.start();
-        currentTime.start();
-        while(totTime.read() < RECORDING_TIME)
+        if(signal != PWM_API.read())
         {
-            if(signal != PWM_API.read())
-            {
-                timeList[numElements] = currentTime.read_us();
-                signal = PWM_API.read();
-                ++numElements;
-            }
+            timeList[numElements] = currentTime.read_us();
+            signal = PWM_API.read();
+            ++numElements;
+            //if(numElements >= MAX_BUF_SIZE)
+               //break;
         }
-        totTime.stop();
-        timeOut.stop();
-        //Checking that it didn't get stuck too long on the while loop 
-        if(timeOut.read() >= 14.0)
-            checker = -1.0;
-        else
-            sendAllData(timeList,numElements);
-        delete [] timeList;
-        timeList = 0;
-    }
-    else
+    } 
+    if(numElements <= MIN_NUM_ELEMENTS*2) //Checking that least more than one cycle completed
         checker = -1.0;
+    else
+        sendAllData(timeList,numElements);
+    delete [] timeList;
+    timeList = 0;
     sendStop(-1); //Tells the browser to stop reading
     sendStop(checker);//Tells the browser good(1) or error(-1)
 }
 //-----------------------------------------------------------
 void convertIntToBuf(int num, uint8_t buf[]) //Converts a int to a uint8_t buffer to send
 {
-    memcpy(buf, &num, sizeof(num));
+    memcpy(buf, &num, sizeof(num)); //Storing the bits of the integer into the buffer
+    //Reversing array below because the endians between the board and browser are different
     uint8_t temp = buf[3];
     buf[3] = buf[0];
     buf[0] = temp;
@@ -173,39 +159,30 @@ void convertIntToBuf(int num, uint8_t buf[]) //Converts a int to a uint8_t buffe
 //----------------------------------------------------------
 void writeToBrowser(uint8_t buffer[]) //Sends data to the browser
 {
-    bool isFinished = false;
-    while(!isFinished)
+    while(1) //Loop will continue until data is written
     {
         if(!webUSB.configured())
             webUSB.connect();
         if(webUSB.configured() && webUSB.write(buffer,SIG_FIGS))
-        {
-            isFinished = true;
-        }
+            break;
     }
 }
 //----------------------------------------------------------
 void readDataFromBrowser(uint8_t *buffer, uint32_t & len) //Reads data from browser into buffer
 {   
-    bool read = false;
-    while(!read)
+    while(1) //Loop will continue until data is read
     {
         if (!webUSB.configured()) 
-        {
-            webUSB.connect();
-        }   
+            webUSB.connect(); 
         if(webUSB.configured() && webUSB.read(buffer, &len))
-        {
-            read = true;
-        } 
+            break;
     }
 }
 //----------------------------------------------------------
-int readCommand(void)//receives the necessary command  
+int readCommand(void)//receives a command from the website
 {   
     uint32_t len; //Leave undeclared, or else read function will not work
-    uint8_t * commandBuf;
-    commandBuf = new uint8_t[MAX_BUF_SIZE]; //Dynamically allocated because read function prefers it
+    uint8_t *commandBuf = new uint8_t[sizeof(int)]; //Dynamically allocated because read function prefers it
     readDataFromBrowser(commandBuf, len);
     int choice = static_cast<int>(commandBuf[0]) - '0'; //Subtracting ascii value of 0 to get integer value
     delete [] commandBuf;
@@ -218,9 +195,10 @@ void sendAllData(int list[], int numElements)
     uint8_t *dataBuffer;
     if(numElements % 2 != 0)
         --numElements; //Discarding extra timestamp for half cycle
-    int currentTime = 0; //Stores total time so that the difference can be sent (eg. off or on time) rather than total time
+    //Stores total time so that the difference can be sent (eg. off or on time) rather than total time
+    int currentTime = list[MIN_NUM_ELEMENTS-1]; //Initialized to this value to discard first two cycles
     //Every other iteration will be off or on timestamp. Off time is first
-    for(int i=0;i<numElements;i++)
+    for(int i = MIN_NUM_ELEMENTS;i < numElements;i++) //i=2 to discard first cycle
     {
             dataBuffer = new uint8_t[sizeof(list[i])];
             convertIntToBuf(list[i] - currentTime, dataBuffer);
@@ -233,8 +211,7 @@ void sendAllData(int list[], int numElements)
 //-----------------------------------------------------------
 void sendStop(int checkNum)
 {
-    uint8_t * stop;
-    stop = new uint8_t[sizeof(checkNum)];
+    uint8_t *stop = new uint8_t[sizeof(checkNum)];
     convertIntToBuf(checkNum, stop);
     writeToBrowser(stop);
     delete [] stop;
