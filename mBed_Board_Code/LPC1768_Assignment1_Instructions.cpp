@@ -198,7 +198,7 @@ void sendAllData(int list[], int numElements)
     //Stores total time so that the difference can be sent (eg. off or on time) rather than total time
     int currentTime = list[MIN_NUM_ELEMENTS-1]; //Initialized to this value to discard first two cycles
     //Every other iteration will be off or on timestamp. Off time is first
-    for(int i = MIN_NUM_ELEMENTS;i < numElements;i++) //i=2 to discard first cycle
+    for(int i = MIN_NUM_ELEMENTS;i < numElements;i++) //i=MIN_NUM_ELEMENTS to discard first two cycles
     {
             dataBuffer = new uint8_t[sizeof(list[i])];
             convertIntToBuf(list[i] - currentTime, dataBuffer);
