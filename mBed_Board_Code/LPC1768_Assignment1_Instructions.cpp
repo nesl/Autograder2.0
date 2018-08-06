@@ -97,7 +97,7 @@ void assignmentOne()
 void sendBinary(uint8_t buffer[], DigitalOut list[], int size) //Function that sends signals to student board
 {
     for(int i=0; i<size; ++i)
-        list[i] = static_cast<int>(buffer[i]) - '0'; //Converts char of digit to int value. Sets pins ON/OFF
+        list[i] = static_cast<int>(buffer[i]) - '0'; //Converts '1' and '0' chars to int values. Sets pins ON/OFF
 }
 //-----------------------------------------------------------
 void timeLiveGraph() //Function that times board
