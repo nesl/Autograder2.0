@@ -1,26 +1,15 @@
-/*
-*Copyright 2018 UCLA Networked and Embedded Systems Lab
-*You may encounter an error that says "requestGetDescriptor(void) is inaccessible" 
-*This is because you imported the usbDevice package from mbed
-*You will have to enter the USBDevice.h file and move the function from private
-*To protected
-*/
+//Copyright 2018 UCLA Networked and Embedded Systems Lab
+
 #include "mbed.h"
 #include "USBSerial.h"
 #include "WebUSBCDC.h"
 
-#include <string>
-#include <sstream>
-#include <iomanip>
-
-//Needed for read buffer
-#define MAX_BUF_SIZE (1024)
-#define NUM_PERIOD_PINS (5)
+#define MAX_BUF_SIZE (1024) 
+#define NUM_PERIOD_PINS (5) 
 #define NUM_DUTY_CYCLE_PINS (7)
-#define SIG_FIGS (4)
 #define MIN_NUM_ELEMENTS (4) //Minimum of 2 cycles, so 4 rises/falls
-#define MIN_TIME_UNIT (.0002) //seconds, 0.2 ms
-#define NUM_TIME_UNITS (25000) 
+#define MIN_TIME_UNIT (.0002) //Seconds, also equals 0.2 ms
+#define NUM_TIME_UNITS (25000) //Adjust this number to adjust the recording time
 #define RECORDING_TIME (MIN_TIME_UNIT * NUM_TIME_UNITS)
 
 //LED's
@@ -52,7 +41,7 @@ DigitalOut DC6(p16);
 DigitalOut LSD(p17); //Least significant bit for duty cycle
 DigitalOut dutyList[] = {MSD, DC2, DC3, DC4, DC5, DC6, LSD}; //List of duty cycle pins
 
-//For Debugging, terminal output
+//For Debugging, terminal output using screen
 Serial pc(USBTX, USBRX);
 
 //Helper Function Prototypes; Definitions below main
@@ -108,53 +97,41 @@ void assignmentOne()
 void sendBinary(uint8_t buffer[], DigitalOut list[], int size) //Function that sends signals to student board
 {
     for(int i=0; i<size; ++i)
-    {
-        if(buffer[i] == '1')
-            list[i] = 1; //Corresponding bit pin is ON
-        else
-            list[i] = 0; //Corresponding bit pin is OFF
-    }
+        list[i] = static_cast<int>(buffer[i]) - '0'; //Converts char of digit to int value. Sets pins ON/OFF
 }
 //-----------------------------------------------------------
 void timeLiveGraph() //Function that times board
 {
     int checker = 1; //Checks for timeout error
-    int signal = 0;
-    int numElements = 0;
-    int *timeList = new int [MAX_BUF_SIZE];
+    int signal = 0; //Determines if rise or fall occurred
+    int numElements = 0; //Stores number of timestamps
+    int *timeList = new int [MAX_BUF_SIZE]; //Holds all of the timestamps
     Timer currentTime;
     currentTime.start();
     while(currentTime.read() < RECORDING_TIME)
     {
-        if(signal != PWM_API.read())
+        if(signal != PWM_API) //Executes if rise/fall occurs
         {
             timeList[numElements] = currentTime.read_us();
-            signal = PWM_API.read();
+            signal = !signal; //Set signal to the new value, in order to detect rise/fall later
             ++numElements;
-            //if(numElements >= MAX_BUF_SIZE)
-               //break;
         }
     } 
-    if(numElements <= MIN_NUM_ELEMENTS*2) //Checking that least more than one cycle completed
+    if(numElements <= MIN_NUM_ELEMENTS) //Checking that at least more than two cycles completed
         checker = -1.0;
     else
-        sendAllData(timeList,numElements);
+        sendAllData(timeList,numElements); //Data sent if minimum number of cycles is met
     delete [] timeList;
     timeList = 0;
     sendStop(-1); //Tells the browser to stop reading
-    sendStop(checker);//Tells the browser good(1) or error(-1)
+    sendStop(checker); //Tells the browser good(1) or error(-1)
 }
 //-----------------------------------------------------------
 void convertIntToBuf(int num, uint8_t buf[]) //Converts a int to a uint8_t buffer to send
 {
+    //Reversing bytes of the number; browser/board have different endianness
+    num = (((num>>24) & 0x000000ff) | ((num>>8) & 0x0000ff00) | ((num<<8) & 0x00ff0000) | ((num<<24) & 0xff000000));
     memcpy(buf, &num, sizeof(num)); //Storing the bits of the integer into the buffer
-    //Reversing array below because the endians between the board and browser are different
-    uint8_t temp = buf[3];
-    buf[3] = buf[0];
-    buf[0] = temp;
-    temp = buf[2];
-    buf[2] = buf[1];
-    buf[1] = temp;
 }
 //----------------------------------------------------------
 void writeToBrowser(uint8_t buffer[]) //Sends data to the browser
@@ -163,7 +140,7 @@ void writeToBrowser(uint8_t buffer[]) //Sends data to the browser
     {
         if(!webUSB.configured())
             webUSB.connect();
-        if(webUSB.configured() && webUSB.write(buffer,SIG_FIGS))
+        if(webUSB.configured() && webUSB.write(buffer, sizeof(int)))
             break;
     }
 }
@@ -192,21 +169,21 @@ int readCommand(void)//receives a command from the website
 //-----------------------------------------------------------
 void sendAllData(int list[], int numElements)
 {
-    uint8_t *dataBuffer;
+    uint8_t *dataBuffer = new uint8_t[sizeof(list[0])]; //Making buffer the size of the datatype
     if(numElements % 2 != 0)
-        --numElements; //Discarding extra timestamp for half cycle
+        --numElements; //Discards extra timestamp for half cycle
+        
     //Stores total time so that the difference can be sent (eg. off or on time) rather than total time
     int currentTime = list[MIN_NUM_ELEMENTS-1]; //Initialized to this value to discard first two cycles
-    //Every other iteration will be off or on timestamp. Off time is first
+    //Iterations will alternate between off or on timestamp. Off time is first
     for(int i = MIN_NUM_ELEMENTS;i < numElements;i++) //i=MIN_NUM_ELEMENTS to discard first two cycles
     {
-            dataBuffer = new uint8_t[sizeof(list[i])];
             convertIntToBuf(list[i] - currentTime, dataBuffer);
             currentTime = list[i];
             writeToBrowser(dataBuffer);
-            delete [] dataBuffer;
-            dataBuffer = 0;
     }
+    delete [] dataBuffer;
+    dataBuffer = 0;
 }
 //-----------------------------------------------------------
 void sendStop(int checkNum)
