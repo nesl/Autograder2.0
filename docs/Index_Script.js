@@ -39,15 +39,14 @@ $(document).ready(function(){
             value: 0x01,
             index: 0x02
         });
-        //Waiting for 4 bytes of data from endpoint #5, store that data in result
-        let result = await device.transferIn(5,4);
-        var theNum = result.data.getUint32();
+        let result = await device.transferIn(5,4); //Waiting for 4 bytes of data from endpoint #5, store that data in result
+        var theNum = result.data.getUint32(); //convert raw bytes to time in microseconds
         
         //This value is what an unsigned integer returns when it is assigned to be -1. This indicates either a stop message or an error
         if(theNum == 4294967295){ 
             return -1; 
         }
-        return (theNum/1000); //Convert raw bytes into int (micro), divide 1000 to go to ms
+        return (theNum/1000); //divide 1000 to go to ms
     }
 
     //-------------------------------------------------------------------
@@ -61,13 +60,10 @@ $(document).ready(function(){
             value: 0x01,
             index: 0x02
         }, 8);
-        //console.log('Sending Data...');
-        //Waiting for 64bytes of data from endpoint #5, store that data in result
         var buffer = new ArrayBuffer(8);
         let encoder = new TextEncoder();
         buffer = encoder.encode(u_input);
-        await device.transferOut(5,buffer);
-        //console.log('Data Successfully Sent');
+        await device.transferOut(5,buffer); 
     }
 
     //-------------------------------------------------------------------
@@ -114,6 +110,7 @@ $(document).ready(function(){
     //-------------------------------------------------------------------    
     /*Define all buttons/variables beforehand*/
     let select = document.getElementById('select');
+    let receive = document.getElementById('request-device');
     let send = document.getElementById('send');
     let liveGraph = document.getElementById('liveGraph');
     let blinky1 = document.getElementById('blinky1');
@@ -121,7 +118,6 @@ $(document).ready(function(){
     let blinky3 = document.getElementById('blinky3');
     var SIG_FIGS = 5;
     var TIME_UNIT = 0.2; //ms
-    var NUM_CYCLES = 10; //Used for plotly function
     var MIN_PERIOD = 10; //Minimum period required (ms)
     var MAX_PERIOD = 320; //Maximum period (ms)
     var MIN_DUTY_CYCLE = 2; //Minimum Duty Cycle (percentage)
@@ -293,24 +289,28 @@ $(document).ready(function(){
     */
     async function plotOscilloscope(device,offList, onList, expOffTime, expOnTime, elementID, mTrace, eTrace){
         var totalTime = 0;
+        var timeOffSet = await receiveData(device); //This is used to throw away the first few cycles
         var exptotalTime = 0;
         var count = 0;
+        var previousTime = 0;
         while(true){
             //Receive timeOff first
-            var timeOff = (await receiveData(device))*1;
+            var timeOff = await receiveData(device) - timeOffSet;
             if(timeOff < 0){ //check that the device is still sending data. -1 will become this value if it is unsigned int
                 break; //Break from the loop if there is no more data
             }
+            timeOff -= totalTime;
             offList.push(timeOff); //Store measured offTime to offList
             totalTime += (timeOff); //Updated totalTime (s to ms)
             exptotalTime += (expOffTime); //Update expected time (ms)
             appendGraph(totalTime, exptotalTime, 0,1,elementID,mTrace,eTrace); //Append both graphs with new data
 
             //Receive timeOn next
-            var timeOn = (await receiveData(device))*1;
+            var timeOn = await receiveData(device) - timeOffSet;
             if(timeOn < 0){ //check that the device is still sending data
                 break; //Break from the loop if there is no more data
             }
+            timeOn -= totalTime;
             onList.push(timeOn); //Store measured onTime to onList
             totalTime+= (timeOn); //Updated totalTime (s to ms)
             exptotalTime += (expOnTime); //Update expected time (ms)
@@ -462,6 +462,7 @@ $(document).ready(function(){
         }
         console.log('TOTAL ERROR FOR ON TIMES FOR TEST CASE ' + caseNum + ': ' + onSum);
         console.log('TOTAL ERROR FOR OFF TIMES FOR TEST CASE ' + caseNum + ': ' + offSum);
+        console.log('Onsize: ' + onList.length + ' Offsize: ' + offList.length);
         console.log('AVERAGE ON TIME ERROR ' + onSum/onList.length);
         console.log('AVERAGE OFF TIME ERROR' + offSum/offList.length);
     }
