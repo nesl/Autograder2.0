@@ -24,6 +24,7 @@
 #include "WebUSBDevice.h"
 #include "WebUSBCDC.h"
 #include "stdint.h"
+#include "WinUSB.h"
 #include "USBDescriptor.h" //Shouldn't need but may need
 //CHECK VALUES BELOW
 
@@ -112,10 +113,63 @@ bool WebUSBCDC::USBCallback_request(void)
 
     /* Process class-specific requests */
 
-    if (transfer->setup.bmRequestType.Type == CLASS_TYPE)
+      if ((transfer->setup.bmRequestType.Type == VENDOR_TYPE) &&
+             (transfer->setup.bmRequestType.Recipient == DEVICE_RECIPIENT) &&
+             (transfer->setup.bRequest == WINUSB_VENDOR_CODE))
     {
-        switch (transfer->setup.bRequest) 
-        {
+        static uint8_t msos20Descriptor[] = {
+            0x0A, 0x00,  // Section size
+            0x00, 0x00,  // MS OS 2.0 descriptor set header
+            0x00, 0x00, 0x03, 0x06,  // Windows version 8.1 (0x06030000)
+            0xB2, 0x00,  // Size, MS OS 2.0 descriptor set (total)
+
+            // Configuration subset header
+            0x08, 0x00,  // Section size
+            0x01, 0x00,  // DescriptorType
+            0x00,        // ConfigurationValue
+            0x00,        // Reserved
+            0xA8, 0x00,  // TotalLength of this subset header
+
+            // Function subset header
+            0x08, 0x00,  // Section size
+            0x02, 0x00,  // DescriptorType
+            WEBUSB_INTERFACE_NUMBER,  // WebUSB interface number (we don't need one for USBCDC)
+            0x00,        // Reserved
+            0xA0, 0x00,  // TotalLength of this subset header
+
+            // Compatible ID descriptor
+            0x14, 0x00,  // Section size
+            0x03, 0x00,  // DescriptorType (MS OS 2.0 compatible) 
+            'W','I','N','U','S','B',0,0,    // compatible ID - WINUSB
+            0, 0, 0, 0, 0, 0, 0, 0,         // subCompatibleID
+
+            // Extended properties descriptor with interface GUID
+            0x84, 0x00,   // Section size
+            0x04, 0x00,   // DescriptorType
+            0x07, 0x00,   // PropertyDataType
+            0x2A, 0x00,   // PropertyNameLength
+
+            // Property name : DeviceInterfaceGUIDs
+            'D',0,'e',0,'v',0,'i',0,'c',0,'e',0,'I',0,'n',0,'t',0,'e',0,'r',0,'f',0,'a',0,'c',0,'e',0,'G',0,'U',0,'I',0,'D',0,'s',0,0,0,
+
+            0x50, 0x00,   // wPropertyDataLength
+
+            // Property data: {F7008E18-7F37-4E17-8C1A-D37E18C066E4} - generated with https://www.guidgenerator.com/
+            '{',0,'F',0,'7',0,'0',0,'0',0,'8',0,'E',0,'1',0,'8',0,'-',0,'7',0,'F',0,'3',0,'7',0,'-',0,'4',0,
+            'E',0,'1',0,'7',0,'-',0,'8',0,'C',0,'1',0,'A',0,'-',0,'D',0,'3',0,'7',0,'E',0,'1',0,'8',0,'C',0,
+            '0',0,'6',0,'6',0,'E',0,'4',0,'}',0,0,0,0,0,0
+        };
+
+
+        transfer->remaining = sizeof(msos20Descriptor);
+        transfer->ptr = msos20Descriptor;
+        transfer->direction = DEVICE_TO_HOST;
+        success = true;
+    }
+
+    // Process CDC class-specific requests
+    if (transfer->setup.bmRequestType.Type == CLASS_TYPE) {
+        switch (transfer->setup.bRequest) {
             case CDC_GET_LINE_CODING:
                 transfer->remaining = 7;
                 transfer->ptr = cdc_line_coding;
@@ -129,25 +183,24 @@ bool WebUSBCDC::USBCallback_request(void)
                 break;
             case CDC_SET_CONTROL_LINE_STATE:
                 // we should handle this specifically for the CDC endpoint.
-                if (transfer->setup.wValue & CLS_DTR) 
-                {
+                if (transfer->setup.wValue & CLS_DTR) {
                     cdc_connected = true;
-                }
-                else 
-                {
+                } else {
                     cdc_connected = false;
                 }
                 success = true;
                 break;
             default:
                 break;
-    	}
-	}
+        }
+    }
+
     // Process WebUSB vendor requests
     if (!success)
     {
         success = WebUSBDevice::USBCallback_request();
     }
+
     return success;
 }
 //------------------------------------------------------
