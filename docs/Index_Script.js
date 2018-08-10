@@ -9,8 +9,9 @@ $(document).ready(function(){
         //This function will wait until the device is open
         await device.open();
         //Checks if the device is opened 
-        if(!device.opened) 
+        if(!device.opened) {
             console.log('Could Not Open');
+        }
         else{
             console.log('Opened Successfully');
             //Check if the device is configured
@@ -28,42 +29,56 @@ $(document).ready(function(){
     }
 
     //------------------------------------------------------------------
-    /*This function is used to receive data from device, function will return 
-    the data received.*/
-    async function receiveData(device){
-        //Make the device ready to receive data
+    /*This function is used to setup the browser to receive data from the device. Only needs to be 
+    called once before you start receiving data. Seperated from receiveData function to save time*/
+    async function setControlTransferOut(device){
         await device.controlTransferOut({
             requestType: 'class',
             recipient: 'interface',
             request: 0x22,
             value: 0x01,
             index: 0x02
-        });
-        let result = await device.transferIn(5,4); //Waiting for 4 bytes of data from endpoint #5, store that data in result
-        var theNum = result.data.getUint32(); //convert raw bytes to time in microseconds
+        })
+    }
+
+    //------------------------------------------------------------------
+    /*This function is used to receive data from device, function will return the data received.*/
+    async function receiveData(device){
+        //Waiting for 4 bytes of data from endpoint #5, store that data in result
+        let result = await device.transferIn(5,4);
+        //Convert raw bytes into int (microseconds)
+        var theNum = result.data.getUint32();
         
         //This value is what an unsigned integer returns when it is assigned to be -1. This indicates either a stop message or an error
         if(theNum == 4294967295){ 
             return -1; 
         }
-        return (theNum/1000); //divide 1000 to go to ms
+        return (theNum/1000); // divide 1000 to go to ms
+    }
+
+    //------------------------------------------------------------------
+    /*This function is used to setup the browser to send data to the device. Only needs to be called once before
+    you start sending data. Seperated from sendData function to save time*/
+    async function setControlTransferIn(device){
+        await device.controlTransferIn({
+                requestType: 'class',
+                recipient: 'interface',
+                request: 0x22,
+                value: 0x01,
+                index: 0x02
+            }, 8);
     }
 
     //-------------------------------------------------------------------
     /*This function is used to send data to the device, u_input is data to be sent*/
     async function sendData(device, u_input){
-        //Make the device ready to send data
-        await device.controlTransferIn({
-            requestType: 'class',
-            recipient: 'interface',
-            request: 0x22,
-            value: 0x01,
-            index: 0x02
-        }, 8);
+        ////console.log('Sending Data...');
+        //Waiting for 64bytes of data from endpoint #5, store that data in result
         var buffer = new ArrayBuffer(8);
         let encoder = new TextEncoder();
         buffer = encoder.encode(u_input);
-        await device.transferOut(5,buffer); 
+        await device.transferOut(5,buffer);
+        //console.log('Data Successfully Sent');
     }
 
     //-------------------------------------------------------------------
@@ -71,10 +86,19 @@ $(document).ready(function(){
     async function closeDev(device){
         console.log('Closing...')
         await device.close();
-        if(device.opened)
+        if(device.opened){
             console.log('Device did not close');
-        else
+        }
+        else{
             console.log('Device closed');
+        }
+    }
+
+    //-------------------------------------------------------------------
+    /*This function is used to simulate wait function. ms represents milliseconds to wait. To work, make
+    sure to use await before this function.*/
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     //-------------------------------------------------------------------
@@ -110,7 +134,6 @@ $(document).ready(function(){
     //-------------------------------------------------------------------    
     /*Define all buttons/variables beforehand*/
     let select = document.getElementById('select');
-    let receive = document.getElementById('request-device');
     let send = document.getElementById('send');
     let liveGraph = document.getElementById('liveGraph');
     let blinky1 = document.getElementById('blinky1');
@@ -118,16 +141,11 @@ $(document).ready(function(){
     let blinky3 = document.getElementById('blinky3');
     var SIG_FIGS = 5;
     var TIME_UNIT = 0.2; //ms
+    var NUM_CYCLES = 10; //Used for plotly function
     var MIN_PERIOD = 10; //Minimum period required (ms)
     var MAX_PERIOD = 320; //Maximum period (ms)
     var MIN_DUTY_CYCLE = 2; //Minimum Duty Cycle (percentage)
     var MAX_DUTY_CYCLE = 98; //Maximum Duty Cycle (percentage)
-    //These variables keep track of how many traces have been drawn for the graphs
-    //They prevent overwrite of previous graphs
-    var manualExpTrace = 1;
-    var manualMeasuredTrace = 0;
-    var expTraceGraphAll = 1;
-    var measuredTraceGraphAll = 0;
     let device;
     //Start with all buttons disabled until device is selected
     disableButtons(true);
@@ -162,6 +180,7 @@ $(document).ready(function(){
             blinkLight('3');
         })
     }
+    
     //-------------------------------------------------------------------
     /*Defining what happens when the select button is clicked. This is meant
     to select which device will be communicating with the browser*/
@@ -169,12 +188,12 @@ $(document).ready(function(){
         $(select).click(async()=>{
             try{
                 disableButtons(true);
-                console.log("Device being selected");
+                //console.log("Device being selected");
                 device = await navigator.usb.requestDevice({filters: [{vendorId:0x1F00}]});
-                console.log('Device selected');
+                //console.log('Device selected');
                 disableButtons(false);
             } catch(err){
-                console.log(err);
+                //console.log(err);
                 $(select).attr('disabled', false);
             }
         })
@@ -203,13 +222,11 @@ $(document).ready(function(){
                     disableButtons(true);
                     await connectDev(device);
                     //Send period and duty cycle to device
-                    await sendTestCase(bPeriod, bDutyCycle, gTitle, expOnTime, expOffTime, graphLocation, manualMeasuredTrace, manualExpTrace);
+                    await sendTestCase(bPeriod, bDutyCycle, gTitle, expOnTime, expOffTime, graphLocation);
                     await closeDev(device);
                 } catch(err){
                     console.log(err);
                 }
-                manualExpTrace += 2;
-                manualMeasuredTrace += 2;
                 disableButtons(false);
             }
         })
@@ -226,7 +243,7 @@ $(document).ready(function(){
             //Define all periods and duty cycles in binary
             var NUM_CASES = 5;
             var per1 = '01111'; //160ms
-            var duty1 = '0110010'; //50%
+            var duty1 = '0001111'//'0110010'; //50%
             var per2 = '01011'; //120ms
             var duty2 = '1000110'; //70%
             var per3 = '10110'; //230ms
@@ -245,15 +262,13 @@ $(document).ready(function(){
                 expOnList[i] = tempPeriod * tempDutyCycle;
                 expOffList[i] = tempPeriod - expOnList[i];
             }
-            var totalTime = 0; //The total time elapsed
-            var exptotalTime = 0; //The theoretical time to have elapsed
             var index = 1;  //Keeps track of what test case we are on
             disableButtons(true);
             try{
                 await connectDev(device);
                 for(var i=0; i<NUM_CASES; i+=1){
                     var graphElement = 'plotly-test' + index.toString(); //Get which test case this is
-                    await sendTestCase(perList[i], dutyList[i], index, expOnList[i], expOffList[i], graphElement, measuredTraceGraphAll, expTraceGraphAll);
+                    await sendTestCase(perList[i], dutyList[i], index, expOnList[i], expOffList[i], graphElement);
                     index++;
                 }
                 /* //Run recordGrades.php to save grades
@@ -262,12 +277,9 @@ $(document).ready(function(){
                     url: 'serverFiles/recordGrades.php', //what file to run
                     data: { fGrade: finalResult, l_name:lastName, f_name:firstName}, //what data to send
                     success: function(response) {     //Run this function if successful
-                        console.log('Saved Results');
+                        //console.log('Saved Results');
                     }
                 });*/
-
-                expTraceGraphAll += 2;
-                measuredTraceGraphAll +=2;
                 await closeDev(device);
             }
             catch(err){
@@ -280,55 +292,254 @@ $(document).ready(function(){
     }
 
     //-------------------------------------------------------------------
-    /*This function is used to receive time stamps of PWM waves and plot them on a graph.
-    *@param {device} device - The device that is sending data
-    *@param {array} offList - An array used to stored all off times of falls
-    *@param {array} onList - An array used to stored all on times of rises
-    *@param {float} expOffTime - Expected off time of all falls
-    *@param {float} expOnTime - Expected on time of all rises
+    /*This function will push a test case to the board and perform various operations on the data
+    *@param {String} periodToSend - A binary string representing the period
+    *@param {String} dutyToSend - A binary string representing the duty cycle
+    *@param {String} index - A string representing which test case it is, represents either a number or phrase
+    *@param {Float} expectedOnTime - A number that represents how long each rise should be for this test case
+    *@param {Float} expectedOffTime - A number that represents how long each fall should be for this test case
+    *@param {String} graphID - A string that determines which div element the graph will go on
     */
-    async function plotOscilloscope(device,offList, onList, expOffTime, expOnTime, elementID, mTrace, eTrace){
-        var totalTime = 0;
-        var timeOffSet = await receiveData(device); //This is used to throw away the first few cycles
-        var exptotalTime = 0;
-        var count = 0;
-        var previousTime = 0;
-        while(true){
-            //Receive timeOff first
-            var timeOff = await receiveData(device) - timeOffSet;
-            if(timeOff < 0){ //check that the device is still sending data. -1 will become this value if it is unsigned int
-                break; //Break from the loop if there is no more data
-            }
-            timeOff -= totalTime;
-            offList.push(timeOff); //Store measured offTime to offList
-            totalTime += (timeOff); //Updated totalTime (s to ms)
-            exptotalTime += (expOffTime); //Update expected time (ms)
-            appendGraph(totalTime, exptotalTime, 0,1,elementID,mTrace,eTrace); //Append both graphs with new data
+    async function sendTestCase(periodToSend, dutyToSend, index, expectedOnTime, expectedOffTime, graphID)
+    {
+        //Set browser to send and receive data
+        await setControlTransferOut(device);
+        await setControlTransferIn(device);
 
-            //Receive timeOn next
-            var timeOn = await receiveData(device) - timeOffSet;
-            if(timeOn < 0){ //check that the device is still sending data
-                break; //Break from the loop if there is no more data
-            }
-            timeOn -= totalTime;
-            onList.push(timeOn); //Store measured onTime to onList
-            totalTime+= (timeOn); //Updated totalTime (s to ms)
-            exptotalTime += (expOnTime); //Update expected time (ms)
-            appendGraph(totalTime, exptotalTime, 1,0,elementID, mTrace, eTrace); //Append both graphs with new data
+        let onList = []; //Stores measured on time for each rise
+        let offList = []; //Stores measured off time for each fall
 
-            //Check that the x-axis does not exceed 500 units, if so adjust the graph
-            if(count > 500){
-                var newLayout = {
-                    'xaxis.range': [count - 500, count]
-                }
-                Plotly.relayout(elementID,newLayout);
-            }
-            count = totalTime;
+        //Initialize the measured
+        Plotly.purge(graphID);
+        initGraph(graphID, 'Test Case: ' + index, 'Your Results');
+
+        //Send period followed by duty cycle to test board
+        await sendData(device,'0'); //Tell device this is assignment 0
+        await sendData(device, periodToSend); 
+        await sendData(device, dutyToSend);
+        //Loop until the testboard is finished sending data
+        await plotOscilloscope(device,offList,onList,graphID);
+        //Receive calculated period and duty cycle from device last
+        //Check for timeOut error
+        var checkStatus = await receiveData(device);
+        if(checkStatus < 0){
+            $('#' + graphID).after('<div>There was a TIMEOUT ERROR while processing ' +
+                'test case ' + index + '.</div>');
+        }
+        else{
+            var finalResult = ''; //What will be saved to text file on server side
+            var lastName = 'last'; //Used to store last name of student
+            var firstName = 'first'; //Used to store first name of student
+            calculateTotalError(onList,offList,expectedOnTime,expectedOffTime, index);
+            ////console.log('ONTIMES: for test case ' + index + ': ' + onList);
+            ////console.log('OFFTIMES: for test case ' + index + ': ' + offList);
+            //This function is used for the reduce function to sum the arrays
+            const add = (a, b) =>
+                (a + b)
+            var aveOnTimes = onList.reduce(add)/onList.length; //Sums array and divide by array length to find average
+            var aveOffTimes = offList.reduce(add)/offList.length; 
+            var period = (aveOnTimes + aveOffTimes); //Determines average period
+            var dCycle = (aveOnTimes / (aveOnTimes + aveOffTimes));
+            var expectedPer = expectedOnTime + expectedOffTime;  //Get expected period for this test case
+            var expectedDuty = expectedOnTime / expectedPer; //Get expected duty cycle for this test case
+            //console.log('Expected Period: ' + expectedPer + '   Expected Duty ' + expectedDuty);
+            var periodRemainder = getTimeUnits(expectedPer,period,TIME_UNIT).toFixed(SIG_FIGS);
+            var grade = gradeData(periodRemainder, expectedDuty, dCycle);
+            //finalResult is what will be saved on server side for teach access
+            finalResult += 'Test Case: ' + index + '\n' +
+                'Period received: ' + period + 'ms\n' +
+                'Duty Cycle received: ' + dCycle*100 + '%\n' +
+                'Number of time units off: ' + periodRemainder + '\n' +
+                'Grade: ' + grade + '%\n' + '\n' + '\n' ;
+            //Append results to browser
+            $('#' + graphID).after('<div>Test Case: ' + index + '</div>' +
+                '<div>Period received: ' + period + 'ms</div>' +
+                '<div>Duty Cycle received: ' + dCycle*100 + '%</div>' +
+                '<div>Number of time units off: ' + periodRemainder + '</div>' +
+                '<div>Grade: ' + grade + '%</div><br>'); 
         }
     }
 
     //-------------------------------------------------------------------
-    /*This function is used to validate period and duty cycle*/
+    /*This function is used to receive time stamps of PWM waves and plot them on a graph.
+    *@param {device} device - The device that is sending data
+    *@param {array} offList - An array used to stored all off times of falls
+    *@param {array} onList - An array used to stored all on times of rises
+    *@param {string} elementID - The string id of DOM element to place graph in
+    */
+    var currCycle = 0; //Keeps track of the current cycle being plotted 
+    var onCounter = 0; //Keeps track of what rise is being plotted
+    var offCounter = 0; //Keeps track of what fall is being plotted
+    var flag = true; //Used to set flag on whether to keep plotting 
+    async function plotOscilloscope(device,offList, onList, elementID){
+        var totalTime = 0; //Used to keep track of the current time stamp
+        var count = 0; //Count used to adjust x-axis on graph as needed
+        var timeOffPromise, timeOnPromise; //Used to hold promises of timeOff/timeOn
+        var fOff = 0; //Used to get value from timeOffPromise
+        var fOn = 0; //Used to get value from timeOnPromise
+        var waitPromise; //Used as a temp variable to wait for timeOn/timeOff Promise
+        var record = true; //Flag used to determine whether to keep receiving data 
+        //Set flag to true for plotting function
+        flag = true; 
+        var offSet = 0;
+
+        try{
+            //Wait for first timestamp before beginnings async functions
+            totalTime = await receiveData(device);
+            if(totalTime < 0){
+                record = false;
+            }
+            if(record){
+                fOff = (await receiveData(device)*1);
+                console.log('aOff: ' + fOff);
+            
+                //Check for potential timeOut errors
+                if(fOff < 0){
+                    record = false;
+                }
+            }
+            //Each iteration of while loop records timeStamps of one cycle
+            while(record){
+                //Begin the plotting function only at the first cycle
+                if(currCycle == 0){
+                    aPlot(offList,onList,elementID);
+                }
+                //Start receiving data for timeOn
+                timeOn =  (receiveData(device));
+                /*This will ignore the first 2 cycles as indicated by the assignment, continue operations
+                with fOff while waiting for timeOn*/
+                if(currCycle >=0){
+                    offList.push(fOff - totalTime);
+                    offCounter++;
+                    totalTime = fOff;
+                }
+                //Must wait for timeOn before proceeding, waitPromise will contain an array of promises
+                waitPromise = await Promise.all([timeOn]);
+                //Get value of timeOn stored in waitPromise array
+                fOn = waitPromise[0];
+                console.log('On: ' + fOn);
+                //Check for potential timeOut errors
+                if(fOn < 0){
+                    break;
+                }
+                //Start receiving data for timeOn
+                timeOff =  (receiveData(device));
+                /*This will ignore the first 2 cycles as indicated by the assignment, continue operations
+                with fOff while waiting for timeOn*/
+                if(currCycle >=0){
+                    onList.push(fOn-totalTime);
+                    onCounter++;
+                    totalTime = fOn;
+                }
+                currCycle++; //Increase the currCycle counter
+                //Must wait for timeOff before proceeding, waitPromise will contain an array of promises
+                waitPromise = await Promise.all([timeOff]);
+                //Get value of timeOn stored in waitPromise array
+                fOff = waitPromise[0];
+                console.log('Off: ' + fOff);
+                //Check for potential timeOut errors
+                if(fOff < 0){
+                    break;
+                }
+        }}catch(err){
+            console.log(err);
+        }
+        flag = false;
+        //Wait for plot function to finish plotting all remaining points
+        await Promise.all([aPlot]);
+        //Reset all counters for next loop
+        onCounter = 0;
+        offCounter = 0;
+        currCycle = 0;
+        console.log(offList);
+        console.log(onList);
+    }
+
+    //-------------------------------------------------------------------
+    /*This function is used to determine what points to plot asynchronously. 
+    *@param {array} offList - An array used to stored all off times of falls
+    *@param {array} onList - An array used to stored all on times of rises
+    *@param {string} elementID - The string id of DOM element to place graph in
+    */
+    async function aPlot(offList,onList,elementID)
+    {
+        var totalTime = 0; //Used to keep track of current timeStamp
+        var onTime = 0;  //Used to keep track of timeStamp when rise is about to fall
+        var offTime = 0; //Used to keep track of timeStamp when fall is about to rise
+        var i = 0; //Used to iterate through onList and offList
+        var count = 0; //Used to realign x-axis of graph as necessary
+        var appendPromise; //Used to store promise made by appendGraph function
+        //Used to set up the x-axis and y-axis of graph
+        var newLayout = {'xaxis.range': [0,500], 'yaxis.range': [0,1]};
+        Plotly.relayout(elementID,newLayout);
+        //While there is data to plot
+        while(flag){
+            await sleep(1); //Wait 1 ms, the plotting doesn't work without this for some reason
+            //Get a copy of both counters to prevent potential issues in sharing offCounter and onCounter
+            var off_counter_copy = offCounter; 
+            var on_counter_copy = onCounter;
+            //Iterate through each element of offList and onList
+            for(; i < on_counter_copy; i++){
+                //Check that we aren't acessing an undefined element of the list
+                if(typeof(offList[i]) != 'undefined' && typeof(onList[i]) != 'undefined'){
+                    //Determine offTime to plot
+                    totalTime += offList[i];
+                    offTime = totalTime;
+                    //Determine onTime to plot
+                    totalTime += onList[i];
+                    onTime = totalTime;
+                    //Beginning plotting via async
+                    appendPromise = appendGraph(offTime,onTime,elementID);
+                    //Adjust x-axis as needed
+                    if(count > 500){
+                        var newLayout = {
+                            'xaxis.range': [count - 500, count]
+                        }
+                        Plotly.relayout(elementID,newLayout);
+                    }
+                    count = totalTime;
+                }
+                else{
+                    //console.log('error');
+                }
+            }
+        }
+        //Wait until all appending is done
+        await Promise.all([appendPromise]);
+    }
+
+    //-------------------------------------------------------------------
+    /*This function initializes a graph with a single point at (0,0)
+    *@param {string} elementID - The HTML element where the graph will be created
+    *@param {string} gTitle - The title of the graph
+    *@parm {string} traceName - Name of the trace
+    */
+    function initGraph(elementID, gTitle, traceName)
+    {
+        //Plotly.plot(element, data, layout)
+        Plotly.plot(elementID, [{y: [0],x: [0], name: traceName}], {title: gTitle,
+            xaxis:{title: 'Time (ms)'}});
+    }
+
+    //-------------------------------------------------------------------
+    /*This function appends a rise/fall of PWM wave
+    *@param {int} off - offTimeStamp to be plotted
+    *@param {int} on - onTimeStamp to be plotted
+    *@param {string} elementID - The HTML element where the graph to be appended is
+    */
+    async function appendGraph(off,on,elementID)
+    {
+        //Plotly.extendTraces(element, updated_data, traces)
+        //y:[[y-cooridinates to push to trace ], [y-coordinates to push to trace 1]]
+        //[trace 0, trace 1]
+        Plotly.extendTraces(elementID, {y:[[0,1,1,0]], x:[[off,off,on,on]]}, [0])
+    }
+
+    //-------------------------------------------------------------------
+    /*This function is used to validate period and duty cycle
+    *@param {int} period - Period to be checked
+    *@param {int} dutyCycle - Duty Cycle to be checked
+    */
     function validate(period,dutyCycle){
         if(period < MIN_PERIOD || period > MAX_PERIOD || (period % 10 != 0)){
                 alert('Error: Period is outside range, please enter a period between ' + MIN_PERIOD +
@@ -344,7 +555,9 @@ $(document).ready(function(){
     }
 
     //-------------------------------------------------------------------
-    /*This function is used to convert period from a decimal number to binary string*/
+    /*This function is used to convert period from a decimal number to binary string
+    *@param {int} period - Period to be converted to binary
+    */
     function perDecimaltoBinary(period){
         var bPeriod = parseInt((period/10)-1, 10).toString(2);
         if(bPeriod.length != 5){
@@ -358,7 +571,9 @@ $(document).ready(function(){
     }
 
     //-------------------------------------------------------------------
-    /*This funciton is used to convert duty cycle from decimal number to binary string*/
+    /*This funciton is used to convert duty cycle from decimal number to binary string
+    *@param {int} dutyCycle - Duty Cycle to be converted 
+    */
     function dCycleDecimaltoBinary(dutyCycle){
         var bDutyCycle = parseInt(dutyCycle, 10).toString(2);
                 if(bDutyCycle.length != 7){
@@ -369,37 +584,6 @@ $(document).ready(function(){
                     bDutyCycle = fillIn + bDutyCycle;
                 }
                 return bDutyCycle;
-    }
-
-    //-------------------------------------------------------------------
-    /*This function initializes a graph with a single point at (0,0)
-    *@param {DOMelement} elementID - The HTML element where the graph will be created
-    *@param {string} gTitle - The title of the graph
-    *@parm {string} traceName - Name of the trace
-    */
-    function initGraph(elementID, gTitle, traceName)
-    {
-        //Plotly.plot(element, data, layout)
-        Plotly.plot(elementID, [{y: [0],x: [0], name: traceName}], {title: gTitle,
-            xaxis:{title: 'Time (ms)'}});
-    }
-
-    //-------------------------------------------------------------------
-    /*This function appends a rise/fall of PWM wave
-    *@param {int} x1 - The measured time of the current edge
-    *@param {int} x2 - The expected time of the current edge
-    *@param {int} y1 - 0 for fall, 1 for rise
-    *@param {int} y2 - 1 for fall, 0 for rise
-    *@param {DOMelement} elementID - The HTML element where the graph to be appended is
-    *@param {int} expTrace - Trace where expected PWM is stored is stored
-    *@param {int} measuredTrace - Trace where measured PWM wave is stored
-    */
-    function appendGraph(x1,x2,y1,y2,elementID, measuredTrace, expTrace)
-    {
-        //Plotly.extendTraces(element, updated_data, traces)
-        //y:[[y-cooridinates to push to trace ], [y-coordinates to push to trace 1]]
-        //[trace 0, trace 1]
-        Plotly.extendTraces(elementID, {y:[[y1,y2],[y1,y2]], x:[[x1,x1],[x2,x2]]}, [measuredTrace,expTrace])
     }
 
     //-------------------------------------------------------------------
@@ -448,10 +632,10 @@ $(document).ready(function(){
     {
         var onSum = 0;
         var offSum = 0;
-        console.log(onList[0]);
-        console.log(offList[0]);
-        console.log(expectedOn);
-        console.log(expectedOff);
+        //console.log(onList[0]);
+        //console.log(offList[0]);
+        //console.log(expectedOn);
+        //console.log(expectedOff);
         for(var i=0;i<onList.length;++i)
         {
             onSum += Math.abs((onList[i] - expectedOn));
@@ -460,79 +644,10 @@ $(document).ready(function(){
         {
             offSum += Math.abs((offList[i] - expectedOff));
         }
-        console.log('TOTAL ERROR FOR ON TIMES FOR TEST CASE ' + caseNum + ': ' + onSum);
-        console.log('TOTAL ERROR FOR OFF TIMES FOR TEST CASE ' + caseNum + ': ' + offSum);
-        console.log('Onsize: ' + onList.length + ' Offsize: ' + offList.length);
-        console.log('AVERAGE ON TIME ERROR ' + onSum/onList.length);
-        console.log('AVERAGE OFF TIME ERROR' + offSum/offList.length);
-    }
-
-    //-------------------------------------------------------------------
-    /*This function will push a test case to the board and perform various operations on the data
-    *@param {String} periodToSend - A binary string representing the period
-    *@param {String} dutyToSend - A binary string representing the duty cycle
-    *@param {String} index - A string representing which test case it is, represents either a number or phrase
-    *@param {Float} expectedOnTime - A number that represents how long each rise should be for this test case
-    *@param {Float} expectedOffTime - A number that represents how long each fall should be for this test case
-    *@param {String} graphID - A string that determines which div element the graph will go on
-    */
-    async function sendTestCase(periodToSend, dutyToSend, index, expectedOnTime, expectedOffTime, graphID, mTrace, eTrace)
-    {
-        var onList = []; //Stores measured on time for each rise
-        var offList = []; //Stores measured off time for each fall
-
-        //Initialize the measured and expected graph
-        initGraph(graphID, 'Test Case: ' + index, 'Your Results');
-        initGraph(graphID, 'Test Case: ' + index, 'Expected Results');
-
-
-        //Send period followed by duty cycle to test board
-        await sendData(device,'0'); //Tell device this is assignment 0
-        await sendData(device, periodToSend); 
-        await sendData(device, dutyToSend);
-
-        //Loop until the testboard is finished sending data
-        await plotOscilloscope(device,offList,onList,expectedOffTime, expectedOnTime ,graphID, mTrace, eTrace);
-        //Receive calculated period and duty cycle from device last
-        
-        //Check for timeOut error
-        var checkStatus = await receiveData(device);
-        if(checkStatus < 0){
-            $('#' + graphID).after('<div>There was a TIMEOUT ERROR while processing ' +
-                'test case ' + index + '.</div>');
-        }
-        else{
-            var finalResult = ''; //What will be saved to text file on server side
-            var lastName = 'last'; //Used to store last name of student
-            var firstName = 'first'; //Used to store first name of student
-            calculateTotalError(onList,offList,expectedOnTime,expectedOffTime, index);
-            console.log('ONTIMES: for test case ' + index + ': ' + onList);
-            console.log('OFFTIMES: for test case ' + index + ': ' + offList);
-            //This function is used for the reduce function to sum the arrays
-            const add = (a, b) =>
-                (a + b)
-            var sumOnTimes = onList.reduce(add); //Sums array
-            var sumOffTimes = offList.reduce(add); 
-            var period = (sumOnTimes + sumOffTimes)/onList.length; //Does not matter which list length is used
-            var dCycle = (sumOnTimes / (sumOnTimes + sumOffTimes));
-            var expectedPer = expectedOnTime + expectedOffTime;  //Get expected period for this test case
-            var expectedDuty = expectedOnTime / expectedPer; //Get expected duty cycle for this test case
-            console.log('Expected Period: ' + expectedPer + '   Expected Duty ' + expectedDuty);
-            var periodRemainder = getTimeUnits(expectedPer,period,TIME_UNIT).toFixed(SIG_FIGS);
-            var grade = gradeData(periodRemainder, expectedDuty, dCycle);
-            //finalResult is what will be saved on server side for teach access
-            finalResult += 'Test Case: ' + index + '\n' +
-                'Period received: ' + period + 'ms\n' +
-                'Duty Cycle received: ' + dCycle*100 + '%\n' +
-                'Number of time units off: ' + periodRemainder + '\n' +
-                'Grade: ' + grade + '%\n' + '\n' + '\n' ;
-            //Append results to browser
-            $('#' + graphID).after('<div>Test Case: ' + index + '</div>' +
-                '<div>Period received: ' + period + 'ms</div>' +
-                '<div>Duty Cycle received: ' + dCycle*100 + '%</div>' +
-                '<div>Number of time units off: ' + periodRemainder + '</div>' +
-                '<div>Grade: ' + grade + '%</div><br>'); 
-        }
+        //console.log('TOTAL ERROR FOR ON TIMES FOR TEST CASE ' + caseNum + ': ' + onSum);
+        //console.log('TOTAL ERROR FOR OFF TIMES FOR TEST CASE ' + caseNum + ': ' + offSum);
+        //console.log('AVERAGE ON TIME ERROR ' + onSum/onList.length);
+        //console.log('AVERAGE OFF TIME ERROR' + offSum/offList.length);
     }
 
     //-------------------------------------------------------------------
@@ -548,7 +663,7 @@ $(document).ready(function(){
 
                 await closeDev(device);
             } catch(err){
-                console.log(err);
+                //console.log(err);
             }
             disableButtons(false);
     }
