@@ -1,7 +1,6 @@
 //Copyright 2018 UCLA Networked and Embedded Systems Lab
 
 #include "mbed.h"
-#include "USBSerial.h"
 #include "WebUSBCDC.h"
 
 #define MAX_BUF_SIZE (1024) 
