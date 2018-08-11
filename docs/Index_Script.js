@@ -391,7 +391,7 @@ $(document).ready(function(){
             }
             if(record){
                 fOff = (await receiveData(device)*1);
-                console.log('aOff: ' + fOff);
+                
             
                 //Check for potential timeOut errors
                 if(fOff < 0){
@@ -417,7 +417,7 @@ $(document).ready(function(){
                 waitPromise = await Promise.all([timeOn]);
                 //Get value of timeOn stored in waitPromise array
                 fOn = waitPromise[0];
-                console.log('On: ' + fOn);
+                
                 //Check for potential timeOut errors
                 if(fOn < 0){
                     break;
@@ -436,7 +436,7 @@ $(document).ready(function(){
                 waitPromise = await Promise.all([timeOff]);
                 //Get value of timeOn stored in waitPromise array
                 fOff = waitPromise[0];
-                console.log('Off: ' + fOff);
+               
                 //Check for potential timeOut errors
                 if(fOff < 0){
                     break;
