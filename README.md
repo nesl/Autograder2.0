@@ -30,6 +30,7 @@ p6 | PE_15
 p7 | PE_14
 p8| PE_12
 p9| PE_10
+
 **Duty Cycle Pins, ordered from most significant to least significant bit**
 
 LPC1768 | NUCLEO
@@ -43,7 +44,7 @@ LPC1768 | NUCLEO
  p17 | PF_14
  
  **Other Pins**
- 
+
 LPC1768 | NUCLEO
 ------------ | -------------
  p21 | PE_0
