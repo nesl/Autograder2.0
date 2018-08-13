@@ -1,4 +1,3 @@
-
 # Autograder 2.0
 A website for automating the grading process of embedded systems assignments with microcontrollers. Implements communication between the website and a microcontroller.
 
@@ -8,6 +7,7 @@ A website for automating the grading process of embedded systems assignments wit
   * [Communication/Setting Up](#communication-and-setting-up)
 - [Dependencies](#dependencies)
 - [How to Run](#how-to-run)
+- [References](#references)
 
 ## Hardware
 This system uses [mBed's](https://www.mbed.com/en/) [LPC1768](https://os.mbed.com/platforms/mbed-LPC1768/) and [NUCLEO F746ZG](https://os.mbed.com/platforms/ST-Nucleo-F746ZG/) development boards. The student programs the NUCLEO board, while the LPC1768 records data from the NUCLEO and reports data back to the website.
@@ -57,3 +57,7 @@ The library for communication between the board and the browser has been provide
 The website uses the [plotly.js](https://plot.ly/javascript/) library to graph the PWM waveforms, as well as Google Chrome's [WebUSB](https://wicg.github.io/webusb/) API to communicate with the LPC1768. Google Chrome is the only supported browser for this reason.
 ## How to Run
 Visit the [website](https://nesl.github.io/Autograder2.0/) and use the  `select device` button to connect the LPC1768. The `send` button allows you to send your own custom period and duty cycle to the LPC1768, while the `Graph all test cases` button uses 5 hard-coded test cases. Currently, the website does not save or store data.
+## References
+[WebUSB DFU](https://os.mbed.com/users/devanlai/code/USBDevice_STM32F103/) by Devan Lai
+[empirikit-controller](https://github.com/empirikit/empirikit-controller) by larsgk
+[Autograder 1.0](https://github.com/nesl/AutoGrader) by UCLA's NESL
