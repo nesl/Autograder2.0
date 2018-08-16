@@ -119,9 +119,9 @@ $(document).ready(function(){
     let blinky1 = document.getElementById('blinky1');
     let blinky2 = document.getElementById('blinky2');
     let blinky3 = document.getElementById('blinky3');
+    let blinky4 = document.getElementById('blinky4');
     var SIG_FIGS = 5;
     var TIME_UNIT = 0.2; //ms
-    var NUM_CYCLES = 10; //Used for plotly function
     var MIN_PERIOD = 10; //Minimum period required (ms)
     var MAX_PERIOD = 320; //Maximum period (ms)
     var MIN_DUTY_CYCLE = 2; //Minimum Duty Cycle (percentage)
@@ -138,9 +138,7 @@ $(document).ready(function(){
     $(select).attr('disabled',false);
 
     //-------------------------------------------------------------------
-    /*Defining what happens when the blinky1 button is clicked. This is meant to
-    simulate picking an assignment. It will tell the device what assignment is to
-    be graded.*/
+    //Defining what happens when the blinky1 button is clicked. Turns first LED ON/OFF
     if(blinky1){
         $(blinky1).click(async()=>{
             blinkLight('1');
@@ -148,9 +146,7 @@ $(document).ready(function(){
     }
 
     //-------------------------------------------------------------------
-    /*Defining what happens when the blinky2 button is clicked. This is meant to
-    simulate picking an assignment. It will tell the device what assignment is to
-    be graded.*/
+    //Defining what happens when the blinky2 button is clicked. Turns second LED ON/OFF
     if(blinky2){
         $(blinky2).click(async()=>{
             blinkLight('2');
@@ -158,12 +154,17 @@ $(document).ready(function(){
     }
 
     //-------------------------------------------------------------------
-    /*Defining what happens when the blinky3 button is clicked. This is meant to
-    simulate picking an assignment. It will tell the device what assignment is to
-    be graded.*/
+    //Defining what happens when the blinky3 button is clicked. Turns third LED ON/OFF
     if(blinky3){
         $(blinky3).click(async()=>{
             blinkLight('3');
+        })
+    }
+    //-------------------------------------------------------------------
+    //Defining what happens when the blinky4 button is clicked. Turns fourth LED ON/OFF
+    if(blinky4){
+        $(blinky4).click(async()=>{
+            blinkLight('4');
         })
     }
     //-------------------------------------------------------------------
@@ -231,8 +232,10 @@ $(document).ready(function(){
             var NUM_CASES = 5;
             var per1 = '01111'; //160ms
             var duty1 = '0110010'; //50%
+            //var duty1 = '0001111'; //ALTERNATE TEST CASE. 15%
             var per2 = '01011'; //120ms
             var duty2 = '1000110'; //70%
+            //var duty2 = '1111111'; //ALTERNATE TEST CASE. >100%, so tests error handling.
             var per3 = '10110'; //230ms
             var duty3 = '1011010'; //90%    
             var per4 = '11110'; //310ms
@@ -297,7 +300,7 @@ $(document).ready(function(){
         var count = 0;
         while(true){
             //Receive timeOff first
-            var timeOff = (await receiveData(device))*1;
+            var timeOff = (await receiveData(device)) - totalTime;
             if(timeOff < 0){ //check that the device is still sending data. -1 will become this value if it is unsigned int
                 break; //Break from the loop if there is no more data
             }
@@ -307,7 +310,7 @@ $(document).ready(function(){
             appendGraph(totalTime, exptotalTime, 0,1,elementID,mTrace,eTrace); //Append both graphs with new data
 
             //Receive timeOn next
-            var timeOn = (await receiveData(device))*1;
+            var timeOn = (await receiveData(device)) - totalTime;
             if(timeOn < 0){ //check that the device is still sending data
                 break; //Break from the loop if there is no more data
             }
