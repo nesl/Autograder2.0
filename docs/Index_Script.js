@@ -374,7 +374,7 @@ $(document).ready(function(){
     async function plotOscilloscope(device,offList, onList, elementID){
         var totalTime = 0; //Used to keep track of the current time stamp
         var count = 0; //Count used to adjust x-axis on graph as needed
-        var timeOffPromise, timeOnPromise; //Used to hold promises of timeOff/timeOn
+        var temp; //Used to hold promise from receiveData
         var fOff = 0; //Used to get value from timeOffPromise
         var fOn = 0; //Used to get value from timeOnPromise
         var waitPromise; //Used as a temp variable to wait for timeOn/timeOff Promise
@@ -391,8 +391,6 @@ $(document).ready(function(){
             }
             if(record){
                 fOff = (await receiveData(device)*1);
-                
-            
                 //Check for potential timeOut errors
                 if(fOff < 0){
                     record = false;
@@ -404,43 +402,37 @@ $(document).ready(function(){
                 if(currCycle == 0){
                     aPlot(offList,onList,elementID);
                 }
-                //Start receiving data for timeOn
-                timeOn =  (receiveData(device));
-                /*This will ignore the first 2 cycles as indicated by the assignment, continue operations
-                with fOff while waiting for timeOn*/
-                if(currCycle >=0){
+                //Start polling device for data
+                temp = receiveData(device);
+                //If currCycle is even, current value is a fall and temp will be a rise
+                if(currCycle%2 == 0){
                     offList.push(fOff - totalTime);
                     offCounter++;
                     totalTime = fOff;
+                    //Wait to finish receiving data
+                    waitPromise = await Promise.all([temp]);
+                    //Get data stored in waitPromise
+                    fOn = waitPromise[0];
+                    //Check for timeout errors
+                    if(fOn < 0){
+                        break;
+                    }
                 }
-                //Must wait for timeOn before proceeding, waitPromise will contain an array of promises
-                waitPromise = await Promise.all([timeOn]);
-                //Get value of timeOn stored in waitPromise array
-                fOn = waitPromise[0];
-                
-                //Check for potential timeOut errors
-                if(fOn < 0){
-                    break;
-                }
-                //Start receiving data for timeOn
-                timeOff =  (receiveData(device));
-                /*This will ignore the first 2 cycles as indicated by the assignment, continue operations
-                with fOff while waiting for timeOn*/
-                if(currCycle >=0){
+                //If currCycle is odd, current value is a rise and temp will be a fall
+                else{
                     onList.push(fOn-totalTime);
                     onCounter++;
                     totalTime = fOn;
+                    //Wait to finish receiving data
+                    waitPromise = await Promise.all([temp]);
+                    //Get data stored in waitPromise
+                    fOff = waitPromise[0];
+                    //Check for timeout errors
+                    if(fOff < 0){
+                        break;
+                    }
                 }
-                currCycle++; //Increase the currCycle counter
-                //Must wait for timeOff before proceeding, waitPromise will contain an array of promises
-                waitPromise = await Promise.all([timeOff]);
-                //Get value of timeOn stored in waitPromise array
-                fOff = waitPromise[0];
-               
-                //Check for potential timeOut errors
-                if(fOff < 0){
-                    break;
-                }
+                currCycle++;
         }}catch(err){
             console.log(err);
         }
