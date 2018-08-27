@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+{% for student in students %}
+
+<div>
+	<p>
+		{{ student.firstName }} {{ student.lastName }} <br> {{ student.id }} <br> {{ student.grade }} <br> {{ student.email }} </b>
+	</p>
+</div><br><br>
+
+{% endfor %}
+
+{% endblock %}
